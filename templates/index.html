@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0c1420">
+    <title>Schach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="app-shell">
+        <section class="game-card" aria-label="Schachspiel">
+            <div class="game-layout">
+                <div class="board-area">
+                    <div class="player-strip top-player">
+                        <div class="player-avatar black-avatar">♚</div>
+                        <div>
+                            <div class="player-name">Schwarz</div>
+                            <div class="player-sub">Am Zug, wenn Schwarz dran ist</div>
+                        </div>
+                        <div class="clock placeholder-clock" id="black-clock">—</div>
+                    </div>
+
+                    <div class="board-row">
+                        <div class="rank-labels" id="rank-labels" aria-hidden="true"></div>
+                        <div class="board-frame">
+                            <div id="chess-board" class="chess-board" role="grid" aria-label="Schachbrett"></div>
+                        </div>
+                    </div>
+
+                    <div class="file-labels" id="file-labels" aria-hidden="true"></div>
+
+                    <div class="player-strip bottom-player">
+                        <div class="player-avatar white-avatar">♔</div>
+                        <div>
+                            <div class="player-name">Weiß</div>
+                            <div class="player-sub">Du kannst mit Klick oder Drag & Drop ziehen</div>
+                        </div>
+                        <div class="clock placeholder-clock" id="white-clock">—</div>
+                    </div>
+                </div>
+
+                <aside class="side-panel">
+                    <div class="status-card" id="status-card">
+                        <div class="status-kicker">PARTIE</div>
+                        <div class="status-main" id="turn-text">Weiß ist am Zug</div>
+                        <div class="status-extra" id="status-extra">Wähle eine Figur aus.</div>
+                    </div>
+
+                    <div class="moves-card">
+                        <div class="card-heading">
+                            <h2>Züge</h2>
+                            <span id="move-count">0</span>
+                        </div>
+                        <div class="moves-list" id="moves-list" aria-live="polite"></div>
+                    </div>
+
+                    <div class="action-row">
+                        <button class="action-button secondary" id="undo-btn" type="button" disabled>↶ Zurück</button>
+                        <button class="action-button secondary" id="appearance-btn" type="button">Aussehen</button>
+                        <button class="action-button secondary" id="settings-btn" type="button">⚙ Einstellungen</button>
+                        <button class="action-button primary" id="new-game-btn" type="button">Neue Partie</button>
+                    </div>
+
+                    <div class="help-text">
+                        <strong>Tipp:</strong> Ziehe eine Figur direkt auf ein Feld oder klicke zuerst die Figur und dann das Zielfeld.
+                    </div>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    <div class="promotion-overlay" id="promotion-overlay" hidden>
+        <div class="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promotion-title">
+            <div class="promotion-kicker">BAUERNUMWANDLUNG</div>
+            <h2 id="promotion-title">Wähle eine Figur</h2>
+            <div class="promotion-options" id="promotion-options"></div>
+        </div>
+    </div>
+
+
+    <div class="appearance-overlay" id="appearance-modal" hidden>
+        <div class="appearance-modal" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
+            <div class="appearance-header">
+                <div>
+                    <div class="status-kicker">DARSTELLUNG</div>
+                    <h2 id="appearance-title">Brett &amp; Figuren</h2>
+                    <div class="appearance-current">Brett: <strong id="active-board-name">Brown</strong> · Figuren: <strong id="active-piece-name">3D Wood</strong></div>
+                </div>
+                <button class="icon-button" id="appearance-close" type="button" aria-label="Schließen">×</button>
+            </div>
+            <div class="appearance-tabs">
+                <button class="appearance-tab active" type="button" data-tab="boards">Brett</button>
+                <button class="appearance-tab" type="button" data-tab="pieces">Figuren</button>
+            </div>
+            <div class="appearance-toolbar">
+                <input id="style-search" class="style-search" type="search" placeholder="Stil suchen …" autocomplete="off">
+            </div>
+            <div class="appearance-panel" id="appearance-boards">
+                <div class="style-grid" id="board-style-grid"></div>
+            </div>
+            <div class="appearance-panel" id="appearance-pieces" hidden>
+                <div class="style-grid" id="piece-style-grid"></div>
+            </div>
+            <div class="appearance-note">
+                Die Sammlung im Darstellungsmenü stammt aus dem öffentlich einsehbaren Repository von Giorgio Megrelli. Die dort enthaltenen Dateien werden hier nur extern geladen und nicht in diese ZIP-Datei kopiert. Prüfe für eine Veröffentlichung außerhalb deines privaten Projekts die Rechte der jeweiligen Assets.
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-overlay" id="settings-modal" hidden>
+        <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <div class="settings-header">
+                <div>
+                    <div class="status-kicker">SPIELBRETT</div>
+                    <h2 id="settings-title">Einstellungen</h2>
+                    <div class="appearance-current">Bewegung und Animationen</div>
+                </div>
+                <button class="icon-button" id="settings-close" type="button" aria-label="Schließen">×</button>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-title-row">
+                    <div>
+                        <h3>Figurenanimation</h3>
+                        <p>Bestimme, wie schnell und wie weich die Figuren nach einem Zug animiert werden.</p>
+                    </div>
+                    <label class="switch" aria-label="Figurenanimation ein/aus">
+                        <input id="piece-animation-toggle" type="checkbox">
+                        <span class="switch-track"></span>
+                    </label>
+                </div>
+                <div id="animation-options" class="radio-list">
+                    <label class="radio-option"><input type="radio" name="piece-animation" value="slow"><span class="radio-dot"></span><span><strong>Langsam</strong><small>Ruhige, lange Bewegung</small></span></label>
+                    <label class="radio-option"><input type="radio" name="piece-animation" value="medium"><span class="radio-dot"></span><span><strong>Medium (default)</strong><small>Die ausgewogene Standardgeschwindigkeit</small></span></label>
+                    <label class="radio-option"><input type="radio" name="piece-animation" value="fast"><span class="radio-dot"></span><span><strong>Schnell</strong><small>Kurze, direkte Bewegung</small></span></label>
+                    <label class="radio-option"><input type="radio" name="piece-animation" value="natural"><span class="radio-dot"></span><span><strong>Natürlich</strong><small>Weicher Start und sanftes Abbremsen</small></span></label>
+                    <label class="radio-option"><input type="radio" name="piece-animation" value="arcade"><span class="radio-dot"></span><span><strong>Spielhölle</strong><small>Deutlicherer, verspielter Effekt</small></span></label>
+                    <label class="radio-option"><input type="radio" name="piece-animation" value="dynamic"><span class="radio-dot"></span><span><strong>Dynamisch</strong><small>Federnder, lebendiger Effekt</small></span></label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Spielmodus</h3>
+                    <p>Spiele gegen einen zweiten Menschen am selben Gerät oder gegen den Computer.</p>
+                </div>
+                <div class="settings-row">
+                    <label for="game-mode-select">Modus</label>
+                    <select id="game-mode-select" class="settings-select">
+                        <option value="human-vs-human">Mensch gegen Mensch</option>
+                        <option value="human-vs-computer">Mensch gegen Computer</option>
+                    </select>
+                </div>
+                <div id="ai-options" hidden>
+                    <div class="settings-row">
+                        <label for="ai-color-select">Du spielst</label>
+                        <select id="ai-color-select" class="settings-select">
+                            <option value="white">Weiß</option>
+                            <option value="black">Schwarz</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <label for="ai-level-select">Spielstärke</label>
+                        <select id="ai-level-select" class="settings-select"></select>
+                    </div>
+                    <div class="settings-row">
+                        <label for="ai-backend-select">Engine</label>
+                        <select id="ai-backend-select" class="settings-select">
+                            <option value="builtin">Eingebaut (sofort einsatzbereit)</option>
+                            <option value="server">Stockfish nativ (volle Stärke)</option>
+                            <option value="stockfish">Stockfish im Browser (WASM)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-hint" id="ai-hint"></div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Zeitkontrolle</h3>
+                    <p>Wähle eine Bedenkzeit. Die Uhr startet mit dem ersten Zug.</p>
+                </div>
+                <div class="settings-row">
+                    <label for="time-control-select">Bedenkzeit</label>
+                    <select id="time-control-select" class="settings-select"></select>
+                </div>
+                <div class="settings-hint" id="time-control-hint">Ohne Zeit: Die Uhren bleiben ausgeblendet.</div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Figurenbewegung</h3>
+                    <p>Lege fest, wie du Figuren mit der Maus bewegen möchtest.</p>
+                </div>
+                <div class="settings-row">
+                    <label for="piece-movement-select">Art der Zugeingabe</label>
+                    <select id="piece-movement-select" class="settings-select">
+                        <option value="drag-or-click">Drag oder click</option>
+                        <option value="drag">Nur Drag</option>
+                        <option value="click">Nur Klick</option>
+                    </select>
+                </div>
+                <div class="settings-preview">
+                    <div class="mini-board" aria-hidden="true">
+                        <div class="mini-piece">♞</div><div class="mini-hint"></div>
+                    </div>
+                    <div>
+                        <strong id="movement-preview-title">Drag oder click</strong>
+                        <p id="movement-preview-text">Ziehe Figuren bei gedrückter linker Maustaste oder wähle Start- und Zielfeld per Klick.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-footer">
+                Einstellungen werden automatisch auf diesem Gerät gespeichert.
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='appearance.js') }}"></script>
+    <script src="{{ url_for('static', filename='settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='chess-engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='clock.js') }}"></script>
+    <script src="{{ url_for('static', filename='ai.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

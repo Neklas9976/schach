@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Schach-Engine: mehrere hundert MB gross und GPL-lizenziert.
+# Gehoert nicht in die Versionsverwaltung - jeder legt sie sich lokal hin.
+engine/*
+!engine/README.md
+
+# Optionaler WASM-Build von Stockfish (ebenfalls gross, ebenfalls GPL)
+static/stockfish.js
+static/stockfish.wasm
+
+# Node
+node_modules/
+
+# Editor / Betriebssystem
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
