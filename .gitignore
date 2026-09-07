@@ -23,3 +23,7 @@ node_modules/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Spielserver: Abhaengigkeiten und die Kontendatei gehoeren nicht ins Repo.
+server/node_modules/
+server/data/
