@@ -2310,10 +2310,53 @@
 
   /* --- Ablauf ------------------------------------------------------------ */
 
+  /**
+   * Legt die laufende Partie beiseite, damit das Training sie nicht frisst.
+   *
+   * Das Training laedt eine Stellung aufs Brett, und `loadGame` raeumt dabei
+   * alles weg. Wer mitten in einer Partie auf "Puzzle" drueckt, haette sie
+   * sonst kommentarlos verloren.
+   */
+  function captureGame(){
+    return {
+      state:ChessEngine.cloneState(state),
+      history:history.slice(),
+      movesLog:movesLog.map(m=>({...m})),
+      repetition:{...repetition},
+      startingFen,viewPly,gameEnded,resignedBy,timeoutResult,archivedGameId,
+      flipped,
+      clock:window.ChessClock?window.ChessClock.getState():null
+    };
+  }
+
+  function restoreGame(saved){
+    state=saved.state;history=saved.history;movesLog=saved.movesLog;
+    repetition=saved.repetition;startingFen=saved.startingFen;
+    viewPly=saved.viewPly;gameEnded=saved.gameEnded;
+    resignedBy=saved.resignedBy;timeoutResult=saved.timeoutResult;
+    archivedGameId=saved.archivedGameId;
+    selected=null;arrows=[];marks=[];hintMove=null;premove=null;
+    reviewPlies=null;reviewEvals=null;currentEval=null;
+    if(window.ChessClock&&saved.clock){
+      window.ChessClock.restoreState(saved.clock);
+      window.ChessClock.resetDisplayCache?.();
+      window.ChessClock.repaint?.();
+    }
+    setFlipped(saved.flipped);
+    refreshEvaluation();
+    // Die Partie war vielleicht am Computer, als das Training begann.
+    if(!gameEnded) window.setTimeout(maybeRequestComputerMove,0);
+  }
+
   function startPuzzle(puzzle){
     if(!puzzle||moveTransaction) return;
+    // Nur beim Eintritt sichern, nicht bei jeder weiteren Aufgabe - sonst
+    // waere die Partie nach der zweiten Aufgabe eine Puzzlestellung.
+    const carried=puzzleMode?puzzleMode.savedGame
+      :((movesLog.length&&!gameEnded)?captureGame():null);
     const position=ChessEngine.fromFen(puzzle.fen);
     puzzleMode={
+      savedGame:carried,
       session:window.ChessPuzzles.createSession(puzzle),
       side:position.turn,
       status:'playing',
@@ -2347,10 +2390,12 @@
 
   function exitPuzzle(){
     if(!puzzleMode) return;
+    const saved=puzzleMode.savedGame;
     puzzleMode=null;
     document.body.classList.remove('puzzle-active');
     if(puzzleCard) puzzleCard.hidden=true;
-    newGame();
+    if(saved) restoreGame(saved);
+    else newGame();
   }
 
   function nextPuzzle(){

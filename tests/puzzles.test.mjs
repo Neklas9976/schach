@@ -287,3 +287,15 @@ test('a wrong move is taken back by exactly one ply', () => {
   assert.match(appCode, /function puzzleTakeBack\(\)\{/);
   assert.match(appCode, /const previous=history\.pop\(\);/);
 });
+
+test('training gives the game back instead of eating it', () => {
+  // Starting a puzzle loads a position, and loadGame clears everything. A
+  // player who presses "Puzzle" in the middle of a game would otherwise lose
+  // it without a word.
+  assert.match(appCode, /function captureGame\(\)\{/);
+  assert.match(appCode, /function restoreGame\(saved\)\{/);
+  assert.match(appCode, /if\(saved\) restoreGame\(saved\);\s*else newGame\(\);/);
+  // Kept once on entering, not re-taken for every following puzzle - the
+  // second capture would save a puzzle position as "the game".
+  assert.match(appCode, /const carried=puzzleMode\?puzzleMode\.savedGame\s*:\(\(movesLog\.length&&!gameEnded\)\?captureGame\(\):null\);/);
+});
