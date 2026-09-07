@@ -8,16 +8,22 @@
    * root moves within that window of the best score. It is what makes low
    * levels feel like a beatable opponent instead of a weaker-but-still-perfect
    * machine, and it is why level 1 will happily hang a piece.
+   *
+   * `skill` and `elo` only apply to Stockfish. Skill Level alone is not enough
+   * to make the lower levels playable: even at Skill 0 Stockfish still plays
+   * around 1350 Elo, so levels 1-7 additionally cap the strength through
+   * UCI_Elo. `elo: null` means "no cap" and is what makes level 8 the real
+   * full-strength engine.
    */
   const LEVELS = [
-    { id: 1, label: 'Stufe 1 – Anfänger',      maxDepth: 1, maxTimeMs:  200, randomness: 150, skill:  0 },
-    { id: 2, label: 'Stufe 2 – Sehr leicht',   maxDepth: 2, maxTimeMs:  350, randomness:  90, skill:  2 },
-    { id: 3, label: 'Stufe 3 – Leicht',        maxDepth: 2, maxTimeMs:  600, randomness:  40, skill:  4 },
-    { id: 4, label: 'Stufe 4 – Mittel',        maxDepth: 3, maxTimeMs: 1000, randomness:  12, skill:  7 },
-    { id: 5, label: 'Stufe 5 – Fortgeschritten',maxDepth: 4, maxTimeMs: 1500, randomness:  0, skill: 10 },
-    { id: 6, label: 'Stufe 6 – Stark',         maxDepth: 5, maxTimeMs: 2500, randomness:  0, skill: 14 },
-    { id: 7, label: 'Stufe 7 – Sehr stark',    maxDepth: 6, maxTimeMs: 4000, randomness:  0, skill: 17 },
-    { id: 8, label: 'Stufe 8 – Maximum',       maxDepth: 8, maxTimeMs: 6000, randomness:  0, skill: 20 }
+    { id: 1, label: 'Stufe 1 – Anfänger',      maxDepth: 1, maxTimeMs:  200, randomness: 150, skill:  0, elo: 1320 },
+    { id: 2, label: 'Stufe 2 – Sehr leicht',   maxDepth: 2, maxTimeMs:  350, randomness:  90, skill:  2, elo: 1450 },
+    { id: 3, label: 'Stufe 3 – Leicht',        maxDepth: 2, maxTimeMs:  600, randomness:  40, skill:  4, elo: 1600 },
+    { id: 4, label: 'Stufe 4 – Mittel',        maxDepth: 3, maxTimeMs: 1000, randomness:  12, skill:  7, elo: 1800 },
+    { id: 5, label: 'Stufe 5 – Fortgeschritten',maxDepth: 4, maxTimeMs: 1500, randomness:  0, skill: 10, elo: 2000 },
+    { id: 6, label: 'Stufe 6 – Stark',         maxDepth: 5, maxTimeMs: 2500, randomness:  0, skill: 14, elo: 2300 },
+    { id: 7, label: 'Stufe 7 – Sehr stark',    maxDepth: 6, maxTimeMs: 4000, randomness:  0, skill: 17, elo: 2600 },
+    { id: 8, label: 'Stufe 8 – Maximum',       maxDepth: 8, maxTimeMs: 6000, randomness:  0, skill: 20, elo: null }
   ];
 
   const MODES = {
@@ -29,7 +35,13 @@
     mode: MODES.HUMAN,
     level: 4,
     humanColor: 'white',
-    backend: 'builtin'
+    // Only the starting point. If a native engine turns out to be installed,
+    // autoSelectBackend() upgrades this before the first move - see there for
+    // why the default cannot simply be 'server'.
+    backend: 'builtin',
+    // True once the player picked an engine themselves. Auto-selection must
+    // never overrule that choice, not even after a restart.
+    backendPinned: false
   };
 
   function findLevel(id) {
@@ -53,24 +65,16 @@
     return [8 - Number(text[1]), FILES.indexOf(text[0])];
   }
 
-  /** Builds a FEN string; required by Stockfish, unused by the built-in engine. */
+  /**
+   * Builds a FEN string; required by Stockfish, unused by the built-in engine.
+   *
+   * Delegates to the engine rather than serialising the board again here. A
+   * second FEN writer is the same trap as a second move generator: the two
+   * drift, and the engine ends up analysing a position the board is not in.
+   */
   function toFen(state) {
-    let fen = '';
-    for (let r = 0; r < 8; r++) {
-      let empty = 0;
-      for (let c = 0; c < 8; c++) {
-        const piece = state.board[r][c];
-        if (!piece) { empty++; continue; }
-        if (empty) { fen += empty; empty = 0; }
-        fen += piece;
-      }
-      if (empty) fen += empty;
-      if (r < 7) fen += '/';
-    }
-
-    const castling = ['K', 'Q', 'k', 'q'].filter(k => state.castling[k]).join('') || '-';
-    const ep = state.ep ? FILES[state.ep[1]] + (8 - state.ep[0]) : '-';
-    return `${fen} ${state.turn === 'white' ? 'w' : 'b'} ${castling} ${ep} ${state.halfmove} ${state.fullmove}`;
+    const engine = (typeof window !== 'undefined' ? window : globalThis).ChessEngine;
+    return engine.toFen(state);
   }
 
   /* ------------------------------------------------------------------ *
@@ -225,7 +229,8 @@
           body: JSON.stringify({
             fen: toFen(state),
             movetime: level.maxTimeMs,
-            skill: level.skill
+            skill: level.skill,
+            elo: level.elo
           })
         });
 
@@ -267,7 +272,8 @@
     mode: read('ai-mode', DEFAULTS.mode),
     level: read('ai-level', DEFAULTS.level),
     humanColor: read('ai-human-color', DEFAULTS.humanColor),
-    backend: read('ai-backend', DEFAULTS.backend)
+    backend: read('ai-backend', DEFAULTS.backend),
+    backendPinned: read('ai-backend-pinned', DEFAULTS.backendPinned)
   };
 
   let backend = null;
@@ -282,15 +288,45 @@
     return backend;
   }
 
-  /** Reports whether the native engine is reachable, for the settings hint. */
-  async function serverEngineStatus() {
-    try {
-      const response = await fetch('/api/engine/status');
-      if (!response.ok) return { available: false, reason: 'Server nicht erreichbar' };
-      return await response.json();
-    } catch (error) {
-      return { available: false, reason: 'Server nicht erreichbar' };
-    }
+  // Set while a status request is in flight, so callers that ask at the same
+  // moment share one answer.
+  let statusInFlight = null;
+
+  /**
+   * Reports whether the native engine is reachable.
+   *
+   * Three different things ask this on every page load - the automatic backend
+   * choice, the engine hint and the evaluation-bar hint. Concurrent callers
+   * share the one request rather than each making their own: three round trips
+   * for one answer, and three answers that can disagree with each other if the
+   * engine changes state in between.
+   *
+   * Deliberately not cached beyond that. A stale "no engine" would survive
+   * dropping Stockfish into place, which is exactly the moment the answer has
+   * to change.
+   */
+  function serverEngineStatus() {
+    if (statusInFlight) return statusInFlight;
+    statusInFlight = (async () => {
+      try {
+        const response = await fetch('/api/engine/status');
+        if (!response.ok) return { available: false, reason: 'Server nicht erreichbar' };
+        return await response.json();
+      } catch (error) {
+        return { available: false, reason: 'Server nicht erreichbar' };
+      } finally {
+        // Cleared in a microtask so everything awaiting this turn shares it,
+        // while the next question still reaches the server.
+        Promise.resolve().then(() => { statusInFlight = null; });
+      }
+    })();
+    return statusInFlight;
+  }
+
+  function notify(name, detail) {
+    if (typeof window === 'undefined') return;
+    if (typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
+    window.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
   const api = {
@@ -315,12 +351,37 @@
       write('ai-level', settings.level);
       write('ai-human-color', settings.humanColor);
       write('ai-backend', settings.backend);
+      write('ai-backend-pinned', settings.backendPinned);
       // Guarded on the capability actually used, not merely on `window`
       // existing: settings must remain usable in any host that lacks the DOM
       // event constructors.
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
-        window.dispatchEvent(new CustomEvent('chess-ai-settings-changed', { detail: api.getSettings() }));
+      notify('chess-ai-settings-changed', api.getSettings());
+    },
+
+    /** Records an engine the player picked themselves, never to be overridden. */
+    chooseBackend(name) {
+      api.dispose();
+      api.update({ backend: name, backendPinned: true });
+    },
+
+    /**
+     * Switches to the native engine when one is installed.
+     *
+     * The default cannot simply be 'server': most installations have no engine
+     * binary, and a default that fails on the first move is worse than one that
+     * is merely weaker. So the app starts on the always-available built-in
+     * engine and upgrades itself once the server confirms a native engine is
+     * actually there. Resolves to the backend in use afterwards.
+     */
+    async autoSelectBackend() {
+      if (settings.backendPinned) return settings.backend;
+      const status = await serverEngineStatus();
+      if (!status.available) return settings.backend;
+      if (settings.backend !== 'server') {
+        api.dispose();
+        api.update({ backend: 'server' });
       }
+      return settings.backend;
     },
 
     /**
@@ -333,17 +394,28 @@
       thinking = true;
       try {
         const level = findLevel(settings.level);
-        const raw = await activeBackend().bestMove(state, level);
+        let raw;
+        try {
+          raw = await activeBackend().bestMove(state, level);
+        } catch (error) {
+          // An external engine can disappear mid-game: the binary is deleted,
+          // the process crashes, the server is restarted. Losing the game to a
+          // dead subprocess would be the worst outcome, so the built-in engine
+          // - which cannot fail this way - takes over and the player is told.
+          if (settings.backend === 'builtin') throw error;
+          const failed = settings.backend;
+          api.dispose();
+          api.update({ backend: 'builtin' });
+          notify('chess-ai-backend-fallback', { from: failed, to: 'builtin', error });
+          raw = await activeBackend().bestMove(state, findLevel(settings.level));
+        }
         if (!raw) return null;
 
         const from = raw.move ? raw.move.from : raw.from;
         const to = raw.move ? raw.move.to : raw.to;
         const promotion = raw.move ? raw.move.promotion : raw.promotion;
 
-        const candidates = window.ChessEngine.legalMoves(state).filter(m =>
-          m.from[0] === from[0] && m.from[1] === from[1] &&
-          m.to[0] === to[0] && m.to[1] === to[1]
-        );
+        const candidates = window.ChessEngine.movesBetween(state, from, to);
         if (candidates.length === 0) return null;
         if (candidates.length === 1) return candidates[0];
 

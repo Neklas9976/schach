@@ -291,6 +291,12 @@
       const low = ms <= 20_000 && ms > 0;
       if (lastLow[color] !== low) {
         el.classList.toggle('clock-low', low);
+        // Sounded on the transition only. A tick every second would be the
+        // obvious alternative and is exactly the kind of noise people turn
+        // sound off over; the colour change already carries the ongoing state.
+        if (low && lastLow[color] !== null && clock.activeColor() === color && clock.isRunning()) {
+          if (typeof window !== 'undefined') window.ChessSound?.play('lowTime');
+        }
         lastLow[color] = low;
       }
     }

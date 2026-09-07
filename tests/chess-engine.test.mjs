@@ -88,3 +88,132 @@ test('a black checking move is accepted and the next side still has legal moves'
   assert.ok(E.legalMoves(s).length>0);
   assert.ok(E.findLegalMove(s,E.parseSquare('g2'),E.parseSquare('g3')));
 });
+
+/* --------------------------------------------------------------- premoves --- */
+
+const sq = name => E.parseSquare(name);
+const names = targets => [...targets.map(t => E.squareName(t[0], t[1]))].sort();
+
+test('a premove ignores whose turn it is', () => {
+  // The whole point: the move is entered while the opponent is still to move.
+  const s = E.createInitialState();
+  s.turn = 'black';
+  assert.equal(E.legalMoves(s).some(m => m.from[0] === 6 && m.from[1] === 4), false,
+    'the rules offer White nothing here, which is exactly the situation a premove is for');
+  assert.deepEqual(names(E.premoveTargets(s, sq('e2'))), ['d3', 'e3', 'e4', 'f3']);
+});
+
+test('enemy pieces do not block a premove', () => {
+  // Anticipating that they move out of the way is what a premove is for.
+  // Bc1 is hemmed in by the black pawn on d2; the bishop must still be
+  // offered the whole diagonal past it.
+  const s = E.fromFen('4k3/8/8/8/8/8/3p4/2B2K2 w - - 0 1');
+  const targets = names(E.premoveTargets(s, sq('c1')));
+  assert.ok(targets.includes('d2'), 'it may capture the pawn');
+  assert.ok(targets.includes('h6'), 'and the ray must run on past it');
+  // The rules themselves stop at the pawn, which is the difference being tested.
+  const legal = E.legalMoves(s).filter(m => m.from[0] === 7 && m.from[1] === 2);
+  assert.equal(legal.some(m => E.squareName(...m.to) === 'h6'), false);
+});
+
+test('own pieces still block a premove', () => {
+  // With one queued premove they cannot have moved by the time it runs.
+  const s = E.fromFen('4k3/8/8/8/8/8/3P4/3B1K2 w - - 0 1');
+  const targets = names(E.premoveTargets(s, sq('d1')));
+  assert.equal(targets.includes('d2'), false, 'cannot land on its own pawn');
+  assert.equal(targets.includes('d3'), false, 'and cannot pass through it');
+});
+
+test('a pawn may be premoved to either diagonal even with nothing there', () => {
+  // The capture a premove waits for is the reply that has not happened yet.
+  const s = E.fromFen('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1');
+  assert.deepEqual(names(E.premoveTargets(s, sq('e2'))), ['d3', 'e3', 'e4', 'f3']);
+});
+
+test('a blocked pawn is offered no push at all', () => {
+  const s = E.fromFen('4k3/8/8/8/8/4N3/4P3/4K3 w - - 0 1');
+  assert.deepEqual(names(E.premoveTargets(s, sq('e2'))), ['d3', 'f3']);
+});
+
+test('a pawn on the edge is not offered a diagonal off the board', () => {
+  const s = E.fromFen('4k3/8/8/8/8/8/P7/4K3 w - - 0 1');
+  assert.deepEqual(names(E.premoveTargets(s, sq('a2'))), ['a3', 'a4', 'b3']);
+});
+
+test('castling is offered from the home square and settled later', () => {
+  // Whether it is actually available depends on the opponent's reply, so the
+  // rights are not consulted here - findLegalMove decides on execution.
+  const s = E.fromFen('4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1');
+  const targets = names(E.premoveTargets(s, sq('e1')));
+  assert.ok(targets.includes('g1'), 'kingside');
+  assert.ok(targets.includes('c1'), 'queenside');
+});
+
+test('a king that has left home is not offered castling', () => {
+  const s = E.fromFen('4k3/8/8/8/8/8/8/R4K1R w - - 0 1');
+  const targets = names(E.premoveTargets(s, sq('f1')));
+  assert.equal(targets.includes('c1'), false);
+});
+
+test('a knight premove reaches every square its own pieces leave free', () => {
+  const s = E.fromFen('4k3/8/8/8/4N3/8/8/4K3 w - - 0 1');
+  assert.deepEqual(names(E.premoveTargets(s, sq('e4'))), ['c3', 'c5', 'd2', 'd6', 'f2', 'f6', 'g3', 'g5']);
+});
+
+test('an empty square offers no premove', () => {
+  assert.deepEqual([...E.premoveTargets(E.createInitialState(), sq('e4'))], []);
+});
+
+test('every premove target is a square on the board', () => {
+  // A target off the edge would be read as undefined deep in the move
+  // pipeline, where the cause is very hard to see.
+  const s = E.createInitialState();
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    for (const [tr, tc] of E.premoveTargets(s, [r, c])) {
+      assert.ok(tr >= 0 && tr < 8 && tc >= 0 && tc < 8, `off-board target from ${E.squareName(r, c)}`);
+    }
+  }
+});
+
+test('a legal move is always among the premove targets for that piece', () => {
+  // The premove filter may be optimistic, but it must never be narrower than
+  // the rules - that would refuse a move the player is entitled to queue.
+  for (const fen of [
+    'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
+    'r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w KQkq - 0 1'
+  ]) {
+    const state = E.fromFen(fen);
+    for (const move of E.legalMoves(state)) {
+      const targets = E.premoveTargets(state, move.from);
+      const found = targets.some(t => t[0] === move.to[0] && t[1] === move.to[1]);
+      assert.ok(found, `${E.squareName(...move.from)}-${E.squareName(...move.to)} missing in ${fen}`);
+    }
+  }
+});
+
+/* ----------------------------------------------------- moves between --- */
+
+test('a promotion is four legal moves over the same two squares', () => {
+  const s = E.fromFen('6k1/1P6/8/8/8/8/6K1/8 w - - 0 1');
+  const moves = E.movesBetween(s, sq('b7'), sq('b8'));
+  assert.equal(moves.length, 4);
+  assert.deepEqual([...moves.map(m => m.promotion)].sort(), ['b', 'n', 'q', 'r']);
+});
+
+test('findLegalMove needs the promotion piece, movesBetween does not', () => {
+  // Regression: the board resolved a click with findLegalMove and no piece,
+  // which matches no promotion at all - so pushing a pawn to the last rank
+  // did nothing and the promotion dialog was unreachable. Anything that
+  // starts from a pair of squares has to ask movesBetween.
+  const s = E.fromFen('6k1/1P6/8/8/8/8/6K1/8 w - - 0 1');
+  assert.equal(E.findLegalMove(s, sq('b7'), sq('b8')), null);
+  assert.equal(E.findLegalMove(s, sq('b7'), sq('b8'), 'q').promotion, 'q');
+  assert.equal(E.movesBetween(s, sq('b7'), sq('b8')).length, 4);
+});
+
+test('an ordinary move is exactly one move between its squares', () => {
+  const s = E.createInitialState();
+  assert.equal(E.movesBetween(s, sq('e2'), sq('e4')).length, 1);
+  assert.equal(E.movesBetween(s, sq('e2'), sq('e5')).length, 0);
+});

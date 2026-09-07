@@ -13,28 +13,36 @@
             <div class="game-layout">
                 <div class="board-area">
                     <div class="player-strip top-player">
-                        <div class="player-avatar black-avatar">♚</div>
-                        <div>
-                            <div class="player-name">Schwarz</div>
-                            <div class="player-sub">Am Zug, wenn Schwarz dran ist</div>
+                        <div class="player-avatar black-avatar" id="top-avatar">♚</div>
+                        <div class="player-identity">
+                            <div class="player-name" id="top-name">Schwarz</div>
+                            <div class="captured-row" id="top-captured"></div>
                         </div>
                         <div class="clock placeholder-clock" id="black-clock">—</div>
                     </div>
 
-                    <div class="board-row">
-                        <div class="rank-labels" id="rank-labels" aria-hidden="true"></div>
-                        <div class="board-frame">
-                            <div id="chess-board" class="chess-board" role="grid" aria-label="Schachbrett"></div>
+                    <div class="board-with-eval">
+                        <div class="eval-bar" id="eval-bar" hidden aria-hidden="true">
+                            <div class="eval-fill" id="eval-fill"></div>
+                            <span class="eval-score" id="eval-score"></span>
+                        </div>
+                        <div class="board-column">
+                            <div class="board-row">
+                                <div class="rank-labels" id="rank-labels" aria-hidden="true"></div>
+                                <div class="board-frame">
+                                    <div id="chess-board" class="chess-board" role="grid" aria-label="Schachbrett"></div>
+                                    <svg class="board-overlay" id="board-overlay" viewBox="0 0 80 80" preserveAspectRatio="none" aria-hidden="true"></svg>
+                                </div>
+                            </div>
+                            <div class="file-labels" id="file-labels" aria-hidden="true"></div>
                         </div>
                     </div>
 
-                    <div class="file-labels" id="file-labels" aria-hidden="true"></div>
-
                     <div class="player-strip bottom-player">
-                        <div class="player-avatar white-avatar">♔</div>
-                        <div>
-                            <div class="player-name">Weiß</div>
-                            <div class="player-sub">Du kannst mit Klick oder Drag & Drop ziehen</div>
+                        <div class="player-avatar white-avatar" id="bottom-avatar">♔</div>
+                        <div class="player-identity">
+                            <div class="player-name" id="bottom-name">Weiß</div>
+                            <div class="captured-row" id="bottom-captured"></div>
                         </div>
                         <div class="clock placeholder-clock" id="white-clock">—</div>
                     </div>
@@ -47,23 +55,52 @@
                         <div class="status-extra" id="status-extra">Wähle eine Figur aus.</div>
                     </div>
 
+                    <div class="opening-name" id="opening-name" hidden></div>
+
                     <div class="moves-card">
                         <div class="card-heading">
                             <h2>Züge</h2>
                             <span id="move-count">0</span>
                         </div>
                         <div class="moves-list" id="moves-list" aria-live="polite"></div>
+                        <div class="move-nav" role="group" aria-label="Partie durchblättern">
+                            <button class="nav-button" id="nav-first" type="button" title="Zum Anfang (Pos1)" disabled>⏮</button>
+                            <button class="nav-button" id="nav-prev" type="button" title="Ein Zug zurück (←)" disabled>◀</button>
+                            <button class="nav-button" id="nav-next" type="button" title="Ein Zug vor (→)" disabled>▶</button>
+                            <button class="nav-button" id="nav-last" type="button" title="Zum Ende (Ende)" disabled>⏭</button>
+                        </div>
+                    </div>
+
+                    <div class="review-card" id="review-card" hidden>
+                        <div class="card-heading">
+                            <h2>Analyse</h2>
+                            <span id="review-status"></span>
+                        </div>
+                        <div class="accuracy-row" id="accuracy-row"></div>
+                        <svg class="eval-graph" id="eval-graph" viewBox="0 0 300 90" preserveAspectRatio="none" aria-label="Bewertungsverlauf"></svg>
+                        <div class="review-summary" id="review-summary"></div>
                     </div>
 
                     <div class="action-row">
                         <button class="action-button secondary" id="undo-btn" type="button" disabled>↶ Zurück</button>
-                        <button class="action-button secondary" id="appearance-btn" type="button">Aussehen</button>
+                        <button class="action-button secondary" id="flip-btn" type="button" title="Brett drehen (F)">⇅ Drehen</button>
+                        <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
+                        <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
+                    </div>
+                    <div class="action-row">
+                        <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN</button>
+                        <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
+                        <button class="action-button secondary" id="resign-btn" type="button" title="Partie aufgeben">🏳 Aufgeben</button>
                         <button class="action-button secondary" id="settings-btn" type="button">⚙ Einstellungen</button>
+                    </div>
+
+                    <div class="action-row">
+                        <button class="action-button secondary" id="appearance-btn" type="button">Aussehen</button>
                         <button class="action-button primary" id="new-game-btn" type="button">Neue Partie</button>
                     </div>
 
                     <div class="help-text">
-                        <strong>Tipp:</strong> Ziehe eine Figur direkt auf ein Feld oder klicke zuerst die Figur und dann das Zielfeld.
+                        <strong>Tipp:</strong> Rechtsklick zeichnet Pfeile und markiert Felder. Mit ← und → blätterst du durch die Partie.
                     </div>
                 </aside>
             </div>
@@ -78,6 +115,81 @@
         </div>
     </div>
 
+
+    <div class="modal-overlay" id="gameover-overlay" hidden>
+        <div class="gameover-modal" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
+            <div class="gameover-icon" id="gameover-icon">♚</div>
+            <h2 id="gameover-title">Partie beendet</h2>
+            <div class="gameover-reason" id="gameover-reason"></div>
+            <div class="gameover-score" id="gameover-score"></div>
+            <div class="gameover-actions">
+                <button class="action-button secondary" id="gameover-review" type="button">📊 Analyse</button>
+                <button class="action-button secondary" id="gameover-close" type="button">Brett ansehen</button>
+                <button class="action-button primary" id="gameover-rematch" type="button">Revanche</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="archive-overlay" hidden>
+        <div class="archive-modal" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+            <div class="settings-header">
+                <div>
+                    <div class="status-kicker">ARCHIV</div>
+                    <h2 id="archive-title">Meine Partien</h2>
+                    <div class="appearance-current">Beendete Partien werden automatisch gesichert – auf diesem Gerät</div>
+                </div>
+                <button class="icon-button" id="archive-close" type="button" aria-label="Schließen">×</button>
+            </div>
+
+            <div class="stat-grid" id="archive-stats"></div>
+            <div class="stat-detail" id="archive-detail"></div>
+            <div class="archive-list" id="archive-list"></div>
+
+            <div class="archive-footer">
+                <span id="archive-count"></span>
+                <button class="action-button secondary" id="archive-clear" type="button">Alle löschen</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="pgn-overlay" hidden>
+        <div class="pgn-modal" role="dialog" aria-modal="true" aria-labelledby="pgn-title">
+            <div class="settings-header">
+                <div>
+                    <div class="status-kicker">PARTIE-DATEN</div>
+                    <h2 id="pgn-title">PGN &amp; FEN</h2>
+                    <div class="appearance-current">Partie sichern, weitergeben oder eine fremde Partie laden</div>
+                </div>
+                <button class="icon-button" id="pgn-close" type="button" aria-label="Schließen">×</button>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Aktuelle Stellung (FEN)</h3>
+                    <p>Eine einzelne Stellung. Zum Laden eintragen und „Stellung laden“ drücken.</p>
+                </div>
+                <textarea id="fen-text" class="data-text" rows="2" spellcheck="false"></textarea>
+                <div class="action-row">
+                    <button class="action-button secondary" id="fen-copy" type="button">Kopieren</button>
+                    <button class="action-button secondary" id="fen-load" type="button">Stellung laden</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Ganze Partie (PGN)</h3>
+                    <p>Alle Züge samt Kopfdaten. Kommentare und Varianten werden beim Laden übersprungen.</p>
+                </div>
+                <textarea id="pgn-text" class="data-text" rows="10" spellcheck="false"></textarea>
+                <div class="action-row">
+                    <button class="action-button secondary" id="pgn-copy" type="button">Kopieren</button>
+                    <button class="action-button secondary" id="pgn-download" type="button">Als Datei</button>
+                    <button class="action-button secondary" id="pgn-load" type="button">Partie laden</button>
+                </div>
+                <div class="settings-hint" id="pgn-hint">Das Feld zeigt die laufende Partie. Überschreibe es, um eine andere zu laden.</div>
+            </div>
+        </div>
+    </div>
 
     <div class="appearance-overlay" id="appearance-modal" hidden>
         <div class="appearance-modal" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
@@ -103,7 +215,7 @@
                 <div class="style-grid" id="piece-style-grid"></div>
             </div>
             <div class="appearance-note">
-                Die Sammlung im Darstellungsmenü stammt aus dem öffentlich einsehbaren Repository von Giorgio Megrelli. Die dort enthaltenen Dateien werden hier nur extern geladen und nicht in diese ZIP-Datei kopiert. Prüfe für eine Veröffentlichung außerhalb deines privaten Projekts die Rechte der jeweiligen Assets.
+                Die Figuren sind der Satz von <strong>Cburnett</strong> aus Wikimedia Commons – dieselben Zeichnungen, die Wikipedia für Schachdiagramme verwendet, veröffentlicht unter freien Lizenzen (CC&nbsp;BY-SA&nbsp;3.0, GFDL, BSD). Sie liegen im Projekt und werden nicht nachgeladen. Die Brettfarben stammen aus diesem Projekt. Einzelheiten stehen in <code>ATTRIBUTIONS.md</code>.
             </div>
         </div>
     </div>
@@ -177,6 +289,50 @@
             </div>
 
             <div class="settings-section">
+                <div class="settings-title-row">
+                    <div>
+                        <h3>Sound</h3>
+                        <p>Zug, Schlag, Rochade, Schach und Partieende. Die Klänge werden im Browser erzeugt – es wird nichts nachgeladen.</p>
+                    </div>
+                    <label class="switch" aria-label="Sound ein/aus">
+                        <input id="sound-toggle" type="checkbox">
+                        <span class="switch-track"></span>
+                    </label>
+                </div>
+                <div class="settings-row">
+                    <label for="sound-volume">Lautstärke</label>
+                    <input id="sound-volume" class="settings-range" type="range" min="0" max="100" step="5">
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-title-row">
+                    <div>
+                        <h3>Premoves</h3>
+                        <p>Ziehe schon, während der Computer rechnet. Der Zug wird sofort ausgeführt, sobald der Gegner geantwortet hat – oder verworfen, falls er dann nicht mehr geht. Rechtsklick bricht ab.</p>
+                    </div>
+                    <label class="switch" aria-label="Premoves ein/aus">
+                        <input id="premove-toggle" type="checkbox">
+                        <span class="switch-track"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-title-row">
+                    <div>
+                        <h3>Bewertungsbalken</h3>
+                        <p>Zeigt neben dem Brett, wer besser steht. Braucht die native Engine und rechnet nach jedem Zug kurz mit.</p>
+                    </div>
+                    <label class="switch" aria-label="Bewertungsbalken ein/aus">
+                        <input id="eval-toggle" type="checkbox">
+                        <span class="switch-track"></span>
+                    </label>
+                </div>
+                <div class="settings-hint" id="eval-hint"></div>
+            </div>
+
+            <div class="settings-section">
                 <div class="settings-block-heading">
                     <h3>Zeitkontrolle</h3>
                     <p>Wähle eine Bedenkzeit. Die Uhr startet mit dem ersten Zug.</p>
@@ -221,6 +377,11 @@
     <script src="{{ url_for('static', filename='appearance.js') }}"></script>
     <script src="{{ url_for('static', filename='settings.js') }}"></script>
     <script src="{{ url_for('static', filename='chess-engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='notation.js') }}"></script>
+    <script src="{{ url_for('static', filename='openings.js') }}"></script>
+    <script src="{{ url_for('static', filename='sound.js') }}"></script>
+    <script src="{{ url_for('static', filename='review.js') }}"></script>
+    <script src="{{ url_for('static', filename='archive.js') }}"></script>
     <script src="{{ url_for('static', filename='clock.js') }}"></script>
     <script src="{{ url_for('static', filename='ai.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>

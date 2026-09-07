@@ -46,7 +46,19 @@ _ENGINE_NAMES = (
 # Stockfish download (Copying.txt, README.md, the whole src/ tree, the helper
 # shell scripts) must be ignored, or the search would happily "find" a text
 # file and fail later with a confusing error.
+#
+# On Windows a batch wrapper counts too: CreateProcess launches .bat/.cmd as
+# readily as an .exe, and wrapping the engine to pin a Syzygy path or a thread
+# count is a normal way to ship it there.
 _BINARY_SUFFIXES = {"", ".exe", ".bin"}
+if os.name == "nt":
+    _BINARY_SUFFIXES |= {".bat", ".cmd"}
+
+# Range Stockfish accepts for UCI_Elo. Values outside it are rejected by the
+# engine with a silent no-op, which would look like the strength cap simply
+# not working, so requests are clamped here instead.
+_MIN_ELO = 1320
+_MAX_ELO = 3190
 
 # How deep to look below engine/. Unpacking the official archive produces
 # engine/stockfish-.../stockfish-....exe, and some tools add another wrapper
@@ -256,7 +268,13 @@ class UciEngine:
 
     # -- public API --------------------------------------------------------
 
-    def best_move(self, fen: str, movetime_ms: int, skill: int | None = None) -> dict:
+    def best_move(
+        self,
+        fen: str,
+        movetime_ms: int,
+        skill: int | None = None,
+        elo: int | None = None,
+    ) -> dict:
         if not _FEN_RE.match(fen):
             raise EngineError("Ungültige Stellungsangabe")
 
@@ -269,6 +287,17 @@ class UciEngine:
             if skill is not None:
                 skill = max(0, min(int(skill), 20))
                 self._send(f"setoption name Skill Level value {skill}")
+
+            # UCI options persist for the life of the process, so the strength
+            # cap has to be restated on every request - including the "off"
+            # case. Without that, switching from level 4 back to level 8 would
+            # silently keep playing at 1800 Elo.
+            if elo is None:
+                self._send("setoption name UCI_LimitStrength value false")
+            else:
+                elo = max(_MIN_ELO, min(int(elo), _MAX_ELO))
+                self._send("setoption name UCI_LimitStrength value true")
+                self._send(f"setoption name UCI_Elo value {elo}")
 
             self._send("ucinewgame")
             self._send("isready")
@@ -314,11 +343,21 @@ class UciEngine:
 
 
 class EngineManager:
-    """Lazily creates the engine and reports its availability to the app."""
+    """Lazily creates engines and reports their availability to the app.
+
+    There is one process *per purpose*, not one overall. UCI is a single
+    session: every request on a process is serialised behind that process's
+    lock. With a shared engine, turning on the evaluation bar would put an
+    analysis request in front of the opponent's move and the board would
+    visibly stall on every turn. Separate processes cost a little memory and
+    remove the contention entirely.
+    """
+
+    PURPOSES = ('play', 'analysis')
 
     def __init__(self, base_dir: Path):
         self.base_dir = Path(base_dir)
-        self._engine: UciEngine | None = None
+        self._engines: dict[str, UciEngine] = {}
         self._lock = threading.Lock()
 
     def status(self) -> dict:
@@ -334,32 +373,61 @@ class EngineManager:
                 ),
                 "searched": str(engine_dir),
             }
-        return {"available": True, "path": str(path), "name": self._engine.name if self._engine else None}
+        # `file` is what the UI shows. The full path is kept for the rare case
+        # where the user needs to know *which* of several binaries was picked,
+        # but it is far too long to put in front of them by default.
+        started = next((e for e in self._engines.values() if e.name != "Unbekannte Engine"), None)
+        return {
+            "available": True,
+            "path": str(path),
+            "file": path.name,
+            "name": started.name if started is not None else None,
+        }
 
-    def _get(self) -> UciEngine:
+    def _get(self, purpose: str = "play") -> UciEngine:
         with self._lock:
             path = find_engine(self.base_dir)
             if path is None:
                 raise EngineError(
                     "Keine Engine gefunden. Lege die Stockfish-Datei in den Ordner 'engine/'."
                 )
-            if self._engine is None or self._engine.path != path:
-                if self._engine is not None:
-                    self._engine.stop()
-                self._engine = UciEngine(path)
-            return self._engine
+            engine = self._engines.get(purpose)
+            if engine is None or engine.path != path:
+                if engine is not None:
+                    engine.stop()
+                engine = UciEngine(path)
+                self._engines[purpose] = engine
+            return engine
 
-    def best_move(self, fen: str, movetime_ms: int, skill: int | None = None) -> dict:
-        engine = self._get()
+    def _run(self, purpose: str, action):
+        engine = self._get(purpose)
         try:
-            return engine.best_move(fen, movetime_ms, skill)
+            return action(engine)
         except EngineError:
             # A crashed or wedged engine must not poison every later request,
             # so the process is dropped and rebuilt on the next call.
             engine.stop()
             raise
 
+    def best_move(
+        self,
+        fen: str,
+        movetime_ms: int,
+        skill: int | None = None,
+        elo: int | None = None,
+    ) -> dict:
+        return self._run("play", lambda e: e.best_move(fen, movetime_ms, skill, elo))
+
+    def evaluate(self, fen: str, movetime_ms: int = 300) -> dict:
+        """Scores a position at full strength on the analysis process.
+
+        Never capped: an evaluation bar or a game review has to say how good
+        the position actually is, not how good it looks to a deliberately
+        weakened opponent.
+        """
+        return self._run("analysis", lambda e: e.best_move(fen, movetime_ms, skill=20, elo=None))
+
     def shutdown(self) -> None:
-        if self._engine is not None:
-            self._engine.stop()
-            self._engine = None
+        for engine in list(self._engines.values()):
+            engine.stop()
+        self._engines.clear()

@@ -21,10 +21,30 @@ START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
 def write_stub(directory: Path, body: str, name: str = "stockfish") -> Path:
+    """Writes a file that only has to be *found*, never executed."""
     path = directory / name
     path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent(body), encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     return path
+
+
+def write_runnable_stub(directory: Path, body: str) -> Path:
+    """Writes a stub engine the operating system will actually start.
+
+    A shebang script is enough on POSIX. Windows ignores shebangs entirely and
+    only launches .exe/.bat/.cmd, so there the script is driven by a batch
+    wrapper - the same shape a real engine gets wrapped in on Windows, and the
+    reason the bridge accepts those extensions.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        return write_stub(directory, body)
+
+    script = directory / "stub_engine.py"
+    script.write_text(textwrap.dedent(body), encoding="utf-8")
+    launcher = directory / "stockfish.bat"
+    launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}"\r\n', encoding="utf-8")
+    return launcher
 
 
 WORKING_STUB = """
@@ -37,6 +57,26 @@ WORKING_STUB = """
             print("readyok"); sys.stdout.flush()
         elif cmd.startswith("go"):
             print("info depth 9 score cp -42 pv e2e4")
+            print("bestmove e2e4"); sys.stdout.flush()
+        elif cmd == "quit":
+            break
+"""
+
+
+# Logs every command it receives next to itself, so a test can assert on the
+# exact UCI conversation rather than only on the move that comes back.
+RECORDING_STUB = """
+    import os, sys
+    log = os.path.join(os.path.dirname(os.path.abspath(__file__)), "commands.log")
+    for line in sys.stdin:
+        cmd = line.strip()
+        with open(log, "a", encoding="utf-8") as handle:
+            print(cmd, file=handle)
+        if cmd == "uci":
+            print("id name StubFish"); print("uciok"); sys.stdout.flush()
+        elif cmd == "isready":
+            print("readyok"); sys.stdout.flush()
+        elif cmd.startswith("go"):
             print("bestmove e2e4"); sys.stdout.flush()
         elif cmd == "quit":
             break
@@ -111,7 +151,7 @@ class ProtocolTests(unittest.TestCase):
         self.tmp = Path(__file__).resolve().parent / "_tmp_proto"
         (self.tmp / "engine").mkdir(parents=True, exist_ok=True)
         os.environ.pop("CHESS_ENGINE_PATH", None)
-        self.path = write_stub(self.tmp / "engine", WORKING_STUB)
+        self.path = write_runnable_stub(self.tmp / "engine", WORKING_STUB)
         self.engine = UciEngine(self.path)
 
     def tearDown(self):
@@ -158,7 +198,7 @@ class FailureTests(unittest.TestCase):
     def test_engine_that_exits_immediately_fails_fast(self):
         # Regression guard: this used to wait for the full handshake timeout
         # because end-of-stream was signalled with an ambiguous empty string.
-        write_stub(self.tmp / "engine", "import sys\nsys.exit(1)\n")
+        write_runnable_stub(self.tmp / "engine", "import sys\nsys.exit(1)\n")
         manager = EngineManager(self.tmp)
         started = time.monotonic()
         with self.assertRaises(EngineError):
@@ -166,7 +206,7 @@ class FailureTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 5.0, "a dead engine must be detected immediately")
 
     def test_engine_returning_garbage_is_rejected(self):
-        write_stub(self.tmp / "engine", """
+        write_runnable_stub(self.tmp / "engine", """
             import sys
             for line in sys.stdin:
                 cmd = line.strip()
@@ -184,7 +224,7 @@ class FailureTests(unittest.TestCase):
             manager.best_move(START_FEN, 300)
 
     def test_no_legal_move_is_reported_as_none(self):
-        write_stub(self.tmp / "engine", """
+        write_runnable_stub(self.tmp / "engine", """
             import sys
             for line in sys.stdin:
                 cmd = line.strip()
@@ -201,6 +241,70 @@ class FailureTests(unittest.TestCase):
         result = manager.best_move(START_FEN, 300)
         self.assertIsNone(result["bestmove"])
         manager.shutdown()
+
+
+class StrengthTests(unittest.TestCase):
+    """The level selector is only meaningful if the cap reaches the engine."""
+
+    def setUp(self):
+        self.tmp = Path(__file__).resolve().parent / "_tmp_strength"
+        self.engine_dir = self.tmp / "engine"
+        self.engine_dir.mkdir(parents=True, exist_ok=True)
+        os.environ.pop("CHESS_ENGINE_PATH", None)
+        self.path = write_runnable_stub(self.engine_dir, RECORDING_STUB)
+        self.engine = UciEngine(self.path)
+
+    def tearDown(self):
+        self.engine.stop()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def commands(self):
+        log = self.engine_dir / "commands.log"
+        return log.read_text(encoding="utf-8").splitlines() if log.is_file() else []
+
+    def test_a_capped_level_limits_the_engine_strength(self):
+        self.engine.best_move(START_FEN, 100, skill=7, elo=1800)
+        sent = self.commands()
+        self.assertIn("setoption name UCI_LimitStrength value true", sent)
+        self.assertIn("setoption name UCI_Elo value 1800", sent)
+        self.assertIn("setoption name Skill Level value 7", sent)
+
+    def test_the_top_level_turns_the_cap_back_off(self):
+        # Regression guard: UCI options live as long as the process. Leaving
+        # the cap set would keep a switch back to full strength at 1800 Elo.
+        self.engine.best_move(START_FEN, 100, skill=7, elo=1800)
+        self.engine.best_move(START_FEN, 100, skill=20, elo=None)
+        self.assertIn("setoption name UCI_LimitStrength value false", self.commands())
+
+    def test_an_out_of_range_elo_is_clamped_instead_of_ignored(self):
+        # Stockfish silently drops values outside 1320-3190, which would look
+        # exactly like the strength cap not working at all.
+        self.engine.best_move(START_FEN, 100, elo=10)
+        self.engine.best_move(START_FEN, 100, elo=99_999)
+        sent = self.commands()
+        self.assertIn("setoption name UCI_Elo value 1320", sent)
+        self.assertIn("setoption name UCI_Elo value 3190", sent)
+
+
+class StatusTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(__file__).resolve().parent / "_tmp_status"
+        (self.tmp / "engine").mkdir(parents=True, exist_ok=True)
+        os.environ.pop("CHESS_ENGINE_PATH", None)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_status_names_the_file_not_only_the_full_path(self):
+        # The UI shows this to the player, and an absolute path to a nested
+        # archive folder is far too long to be read at a glance.
+        write_stub(self.tmp / "engine", WORKING_STUB, name="stockfish.exe")
+        status = EngineManager(self.tmp).status()
+        self.assertTrue(status["available"])
+        self.assertEqual(status["file"], "stockfish.exe")
+        self.assertIn("stockfish.exe", status["path"])
 
 
 if __name__ == "__main__":

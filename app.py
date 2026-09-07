@@ -44,10 +44,45 @@ def engine_bestmove():
         except (TypeError, ValueError):
             return jsonify({'error': 'Ungültige Spielstärke.'}), 400
 
+    # `null` is meaningful here and distinct from a missing key: it is how the
+    # maximum level asks for an uncapped engine.
+    elo = payload.get('elo')
+    if elo is not None:
+        try:
+            elo = int(elo)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Ungültige Elo-Vorgabe.'}), 400
+
     try:
-        result = engine_manager.best_move(fen, movetime, skill)
+        result = engine_manager.best_move(fen, movetime, skill, elo)
     except EngineError as exc:
         # 503: the request was fine, the engine just is not available.
+        return jsonify({'error': str(exc)}), 503
+
+    return jsonify(result)
+
+
+@app.route('/api/engine/evaluate', methods=['POST'])
+def engine_evaluate():
+    """Scores one position, for the evaluation bar and the game review.
+
+    Separate from /bestmove because it must never be weakened by the current
+    difficulty level, and because it runs on its own engine process so an
+    analysis request cannot queue behind the opponent's search.
+    """
+    payload = request.get_json(silent=True) or {}
+    fen = payload.get('fen')
+    if not isinstance(fen, str):
+        return jsonify({'error': 'Es wurde keine Stellung übergeben.'}), 400
+
+    try:
+        movetime = int(payload.get('movetime', 300))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Ungültige Rechenzeit.'}), 400
+
+    try:
+        result = engine_manager.evaluate(fen, movetime)
+    except EngineError as exc:
         return jsonify({'error': str(exc)}), 503
 
     return jsonify(result)

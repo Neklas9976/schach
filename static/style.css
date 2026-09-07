@@ -327,7 +327,7 @@ button { font: inherit; }
 .help-text { padding: 13px 15px; color: var(--muted); font-size: .78rem; line-height: 1.5; }
 .help-text strong { color: rgba(255,255,255,.84); }
 
-.promotion-overlay { position: fixed; inset:0; display:grid; place-items:center; background: rgba(3,7,13,.7); backdrop-filter: blur(5px); z-index:20; }
+.promotion-overlay { position: fixed; inset:0; display:grid; place-items:center; background: rgba(3,7,13,.7); backdrop-filter: blur(5px); z-index:120; }
 .promotion-modal { width:min(92vw,420px); padding:24px; border-radius:18px; background:#101a2a; border:1px solid rgba(255,255,255,.1); box-shadow:0 24px 70px rgba(0,0,0,.5); }
 .promotion-kicker { color:var(--muted); font-size:.68rem; letter-spacing:.16em; font-weight:800; }
 .promotion-modal h2 { margin:7px 0 18px; font-size:1.35rem; }
@@ -363,7 +363,7 @@ button { font: inherit; }
 
 /* Appearance picker */
 .action-row { grid-template-columns: 1fr 1fr 1.35fr; }
-.appearance-overlay { position: fixed; inset: 0; z-index: 50; display:grid; place-items:center; padding:24px; background: rgba(3,7,13,.78); backdrop-filter: blur(8px); }
+.appearance-overlay { position: fixed; inset: 0; z-index: 150; display:grid; place-items:center; padding:24px; background: rgba(3,7,13,.78); backdrop-filter: blur(8px); }
 .appearance-overlay[hidden] { display:none !important; }
 .appearance-modal { width:min(1050px, 94vw); max-height:min(86vh, 900px); overflow:hidden; display:grid; grid-template-rows:auto auto auto minmax(0,1fr) auto; border-radius:20px; background:#0f1827; border:1px solid rgba(255,255,255,.11); box-shadow:0 30px 90px rgba(0,0,0,.6); }
 .appearance-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:20px 22px 14px; }
@@ -385,8 +385,12 @@ button { font: inherit; }
 .style-card.active { border-color:rgba(110,145,215,.8); box-shadow:0 0 0 2px rgba(110,145,215,.18); }
 .style-preview { display:block; width:100%; aspect-ratio:1.45; border-radius:8px; overflow:hidden; background:#202a3a; }
 .board-preview { background-position:center; background-repeat:no-repeat; }
-.piece-preview { display:grid; place-items:center; background:linear-gradient(145deg,#202a3a,#111927); }
-.piece-preview img { width:78%; height:78%; object-fit:contain; }
+/* Two halves, one light square and one dark, so both colours of the set are
+   shown on the ground they will actually stand on. A single dark panel hid
+   the black pieces almost completely. */
+.piece-preview { display:grid; grid-template-columns:1fr 1fr; place-items:center;
+                 background:linear-gradient(90deg,#efd9b4 0 50%,#b07d4e 50% 100%); }
+.piece-preview img { width:82%; height:82%; object-fit:contain; }
 .style-label { display:block; margin-top:7px; font-size:.77rem; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .appearance-note { padding:11px 22px 16px; color:var(--muted); font-size:.7rem; line-height:1.45; border-top:1px solid rgba(255,255,255,.06); }
 .piece-dragging { cursor:grabbing !important; user-select:none; }
@@ -406,7 +410,7 @@ button { font: inherit; }
 
 /* Settings / movement controls */
 .action-row { grid-template-columns: 1fr 1fr 1fr 1.35fr; }
-.settings-overlay { position: fixed; inset: 0; z-index: 60; display:grid; place-items:center; padding:24px; background:rgba(3,7,13,.78); backdrop-filter:blur(8px); }
+.settings-overlay { position: fixed; inset: 0; z-index: 160; display:grid; place-items:center; padding:24px; background:rgba(3,7,13,.78); backdrop-filter:blur(8px); }
 .settings-overlay[hidden] { display:none !important; }
 .settings-modal { width:min(760px,94vw); max-height:min(88vh,900px); overflow:auto; border-radius:20px; background:#0f1827; border:1px solid rgba(255,255,255,.11); box-shadow:0 30px 90px rgba(0,0,0,.6); }
 .settings-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:22px 24px 18px; border-bottom:1px solid rgba(255,255,255,.07); }
@@ -470,3 +474,453 @@ button { font: inherit; }
 .switch input:focus-visible + .switch-track,
 .radio-option input:focus-visible + .radio-dot,
 .settings-select:focus-visible { outline:2px solid rgba(141,168,221,.85); outline-offset:2px; }
+
+/* ===================================================================== *
+ * Evaluation bar
+ * ===================================================================== */
+
+/* A flex row beside the board, not an extra grid column. `hidden` means
+   display:none, and a display:none element occupies no grid track at all - the
+   board would slide into the rank-label column and overflow everything. As a
+   flex item the bar simply stops existing when hidden, and its gap goes with
+   it. The labels stay inside the column so they keep tracking the board. */
+.board-with-eval {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.board-column { display: flex; flex-direction: column; min-width: 0; }
+
+.eval-bar {
+    position: relative;
+    align-self: center;
+    width: 16px;
+    height: min(78vmin, 780px);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #2b3345;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
+}
+.eval-bar[hidden] { display: none; }
+
+/* White grows upward from the bottom: the side with the advantage owns more
+   of the bar, which is the convention every board uses. */
+.eval-fill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 50%;
+    background: linear-gradient(180deg, #f4f6fb, #d9dee9);
+    transition: height .35s cubic-bezier(.4,0,.2,1);
+}
+
+.eval-score {
+    position: absolute;
+    left: 0; right: 0; top: 3px;
+    text-align: center;
+    font-size: .52rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: rgba(255,255,255,.86);
+}
+.eval-score.for-black { top: auto; bottom: 3px; }
+
+/* ===================================================================== *
+ * Board overlay: arrows and square marks
+ * ===================================================================== */
+
+.board-frame { position: relative; }
+
+.board-overlay {
+    position: absolute;
+    inset: 4px;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+    /* Must never swallow a click meant for a square underneath it. */
+    pointer-events: none;
+    z-index: 3;
+}
+
+.board-arrow {
+    stroke: rgba(255, 170, 60, .82);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+}
+.board-arrow-head { fill: rgba(255, 170, 60, .82); }
+.board-arrow.hint { stroke: rgba(96, 190, 255, .9); }
+.board-arrow-head.hint { fill: rgba(96, 190, 255, .9); }
+
+.board-mark {
+    fill: none;
+    stroke: rgba(255, 170, 60, .85);
+    stroke-width: 1;
+}
+
+/* ===================================================================== *
+ * Captured pieces
+ * ===================================================================== */
+
+.player-identity { min-width: 0; }
+
+.captured-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1px;
+    min-height: 18px;
+    line-height: 1;
+}
+
+.captured-piece {
+    font-size: 1.02rem;
+    color: rgba(237, 243, 255, .5);
+    /* Pieces overlap slightly, the way a captured-piece tray reads. */
+    margin-right: -3px;
+}
+
+.material-plus {
+    margin-left: 7px;
+    font-size: .76rem;
+    font-weight: 800;
+    color: rgba(237, 243, 255, .72);
+}
+
+/* ===================================================================== *
+ * Opening name
+ * ===================================================================== */
+
+.opening-name {
+    padding: 9px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel-soft);
+    font-size: .8rem;
+    font-weight: 700;
+    color: rgba(237, 243, 255, .8);
+}
+.opening-name[hidden] { display: none; }
+
+/* ===================================================================== *
+ * Move list: clickable moves and review labels
+ * ===================================================================== */
+
+.move-link {
+    background: none;
+    border: 0;
+    padding: 3px 6px;
+    border-radius: 6px;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.move-link:hover { background: rgba(255,255,255,.08); }
+.move-link.current { background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(93,121,180,.5); }
+
+.move-mark { margin-left: 4px; font-size: .78em; font-weight: 800; }
+
+.move-link.tone-brilliant .move-mark { color: #2ec4b6; }
+.move-link.tone-great .move-mark     { color: #4ea8de; }
+.move-link.tone-best .move-mark      { color: #7bc47f; }
+.move-link.tone-good .move-mark      { color: #9bbf7a; }
+.move-link.tone-neutral .move-mark   { color: var(--muted); }
+.move-link.tone-warn .move-mark      { color: #e8c34a; }
+.move-link.tone-bad .move-mark       { color: #e88f3c; }
+.move-link.tone-worst .move-mark     { color: var(--danger); }
+
+.move-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+    padding: 8px;
+    border-top: 1px solid rgba(255,255,255,.07);
+}
+
+.nav-button {
+    padding: 7px 0;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.05);
+    color: var(--text);
+    cursor: pointer;
+    transition: .16s ease;
+}
+.nav-button:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+.nav-button:disabled { opacity: .32; cursor: not-allowed; }
+
+/* ===================================================================== *
+ * Review card
+ * ===================================================================== */
+
+.review-card {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    overflow: hidden;
+}
+.review-card[hidden] { display: none; }
+
+.accuracy-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.accuracy-cell { display: grid; justify-items: center; gap: 2px; }
+.accuracy-label { font-size: .7rem; color: var(--muted); font-weight: 700; }
+.accuracy-value { font-size: 1.35rem; font-weight: 800; }
+.accuracy-caption { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+
+.review-summary { padding: 8px; }
+
+.review-row {
+    display: grid;
+    grid-template-columns: 30px 1fr 30px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    font-size: .82rem;
+}
+.review-row:nth-child(odd) { background: rgba(255,255,255,.025); }
+.review-row > span:first-child,
+.review-row > span:last-child { text-align: center; font-weight: 800; color: var(--muted); }
+.review-label { font-weight: 700; }
+
+.review-row.tone-brilliant .review-label { color: #2ec4b6; }
+.review-row.tone-great .review-label     { color: #4ea8de; }
+.review-row.tone-best .review-label      { color: #7bc47f; }
+.review-row.tone-good .review-label      { color: #9bbf7a; }
+.review-row.tone-neutral .review-label   { color: var(--muted); }
+.review-row.tone-warn .review-label      { color: #e8c34a; }
+.review-row.tone-bad .review-label       { color: #e88f3c; }
+.review-row.tone-worst .review-label     { color: var(--danger); }
+
+/* ===================================================================== *
+ * Game-over and PGN dialogs
+ * ===================================================================== */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    /* Above the drag ghost (100) and the move animator (90): a move that
+       lands as this opens must not paint its piece over the dialog. */
+    z-index: 170;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(3, 7, 13, .78);
+    backdrop-filter: blur(8px);
+}
+.modal-overlay[hidden] { display: none !important; }
+
+.gameover-modal {
+    width: min(420px, 94vw);
+    padding: 30px 28px 24px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    text-align: center;
+    box-shadow: 0 26px 60px rgba(0,0,0,.5);
+}
+
+.gameover-icon { font-size: 3rem; line-height: 1; }
+.gameover-modal h2 { margin: 12px 0 6px; font-size: 1.4rem; }
+.gameover-reason { color: var(--muted); font-size: .88rem; }
+.gameover-score { margin-top: 14px; font-size: .78rem; color: var(--muted); }
+.gameover-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 22px; }
+
+.pgn-modal {
+    width: min(720px, 94vw);
+    max-height: 90vh;
+    overflow: auto;
+    padding: 24px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    box-shadow: 0 26px 60px rgba(0,0,0,.5);
+}
+
+.data-text {
+    width: 100%;
+    padding: 11px 13px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.28);
+    color: var(--text);
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: .78rem;
+    line-height: 1.5;
+    resize: vertical;
+}
+.data-text:focus { outline: 2px solid rgba(93,121,180,.6); outline-offset: 1px; }
+
+.settings-range { width: 100%; accent-color: var(--accent); }
+
+@media (max-width: 900px) {
+    .board-with-eval { gap: 6px; }
+    .eval-bar { width: 14px; height: min(88vw, 640px); }
+    .gameover-actions { grid-template-columns: 1fr; }
+}
+
+/* Any number of buttons lays out evenly. The original two- and three-column
+   templates were tied to exactly the buttons that existed at the time. */
+.side-panel .action-row { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
+
+.eval-graph {
+    display: block;
+    width: 100%;
+    height: 90px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    background: rgba(0,0,0,.18);
+    cursor: pointer;
+}
+.eval-graph[hidden] { display: none; }
+
+/* The white area is the share of the game White was better in, so the shape
+   itself reads as "who stood well, and when". */
+.eval-graph-fill { fill: rgba(240, 244, 252, .82); }
+.eval-graph-mid { stroke: rgba(255,255,255,.22); stroke-width: 1; stroke-dasharray: 3 3; }
+.eval-graph-cursor { stroke: var(--accent); stroke-width: 1.5; }
+
+/* ===================================================================== *
+ * Premoves
+ * ===================================================================== */
+
+/* Declared after .last-move so it wins when a square is both - the opponent
+   can perfectly well move onto a square already marked for a premove. */
+.square.premove::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(92, 190, 214, .34);
+    pointer-events: none;
+}
+
+/* While the engine thinks the board normally shows a "wait" cursor. When a
+   premove can be entered that is exactly wrong: the board is usable. */
+html.ai-thinking.premove-possible .chess-board,
+html.ai-thinking.premove-possible .square { cursor: default; }
+
+/* ===================================================================== *
+ * Archive: my games
+ * ===================================================================== */
+
+.archive-modal {
+    width: min(760px, 94vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    box-shadow: 0 26px 60px rgba(0,0,0,.5);
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.stat-tile {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 12px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel-soft);
+    text-align: center;
+}
+
+.stat-value { font-size: 1.4rem; font-weight: 800; line-height: 1.1; }
+.stat-label { font-size: .7rem; color: var(--muted); font-weight: 700; }
+.stat-hint { font-size: .62rem; color: rgba(237,243,255,.36); }
+
+.stat-detail { margin: 12px 2px 4px; }
+.stat-detail p { margin: 0 0 5px; font-size: .76rem; line-height: 1.5; color: var(--muted); }
+
+/* The list is the part that grows, so it takes the leftover height and
+   scrolls on its own - the statistics above must stay in view. */
+.archive-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 10px;
+    padding-right: 2px;
+}
+
+.archive-empty {
+    padding: 26px 16px;
+    text-align: center;
+    font-size: .82rem;
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+.archive-row {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.archive-row:nth-child(odd) { background: rgba(255,255,255,.025); }
+.archive-row:hover { background: rgba(255,255,255,.07); }
+
+.archive-main { min-width: 0; }
+.archive-title { font-size: .84rem; font-weight: 700; }
+.archive-sub {
+    margin-top: 2px;
+    font-size: .7rem;
+    color: var(--muted);
+    /* One line: a wrapped row makes the list impossible to scan. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.result-badge {
+    display: grid;
+    place-items: center;
+    padding: 6px 0;
+    border-radius: 8px;
+    font-size: .78rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid transparent;
+}
+.result-badge.tone-win     { background: rgba(123,196,127,.16); border-color: rgba(123,196,127,.4); color: #a8dcab; }
+.result-badge.tone-loss    { background: rgba(217,85,85,.16);   border-color: rgba(217,85,85,.4);   color: #f0a2a2; }
+.result-badge.tone-draw    { background: rgba(232,195,74,.14);  border-color: rgba(232,195,74,.36); color: #ecd9a0; }
+.result-badge.tone-neutral { background: rgba(255,255,255,.06); border-color: var(--border); color: var(--muted); }
+
+.archive-load { padding: 6px 12px; font-size: .74rem; }
+.archive-delete { padding: 6px 10px; font-size: .74rem; }
+
+.archive-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.07);
+    font-size: .72rem;
+    color: var(--muted);
+}
+
+.archive-footer .action-button { padding: 8px 14px; font-size: .78rem; }
+.action-button.confirming { background: rgba(217,85,85,.2); border-color: rgba(217,85,85,.55); }
+
+@media (max-width: 640px) {
+    .archive-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
+    .archive-load { display: none; }
+}

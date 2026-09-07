@@ -205,8 +205,30 @@
     return moves;
   }
 
+  /**
+   * Every legal move between two squares.
+   *
+   * Usually zero or one, but a promotion is four moves over the same pair of
+   * squares - which is exactly what `findLegalMove` cannot express. Callers
+   * that start from a pair of squares (a click, a drag, a premove) should ask
+   * this and let the count tell them whether a piece still has to be chosen.
+   */
+  function movesBetween(state, from, to) {
+    return legalMoves(state).filter(m =>
+      m.from[0] === from[0] && m.from[1] === from[1] &&
+      m.to[0] === to[0] && m.to[1] === to[1]);
+  }
+
+  /**
+   * The one legal move between two squares, or null.
+   *
+   * Note the promotion argument is part of the identity of the move, not an
+   * optional hint: with it left out, a promotion matches nothing, because
+   * "push to the eighth rank" is not yet a move until the piece is named.
+   * Use `movesBetween` when the caller does not know yet.
+   */
   function findLegalMove(state, from, to, promotion=null) {
-    return legalMoves(state).find(m=>m.from[0]===from[0]&&m.from[1]===from[1]&&m.to[0]===to[0]&&m.to[1]===to[1]&&((m.promotion||null)===(promotion||null))) || null;
+    return movesBetween(state, from, to).find(m=>(m.promotion||null)===(promotion||null)) || null;
   }
 
   function fenKey(state) {
@@ -218,6 +240,161 @@
     const castle=Object.keys(state.castling).filter(k=>state.castling[k]).join('')||'-';
     const ep=state.ep?squareName(state.ep[0],state.ep[1]):'-';
     return `${rows} ${state.turn[0]} ${castle} ${ep}`;
+  }
+
+  /**
+   * Squares a piece may be *pre*-moved to, before the opponent has replied.
+   *
+   * A premove cannot be checked for legality: the position it will be played
+   * in does not exist yet. What can be checked is whether the move is even
+   * plausible for that piece, which is all this offers - `findLegalMove` still
+   * decides at execution time, so an impossible premove is discarded rather
+   * than played.
+   *
+   * The rule is asymmetric on purpose. Enemy pieces are ignored entirely:
+   * anticipating that they move out of the way is the whole point of a
+   * premove, and treating them as blockers would refuse exactly the moves
+   * players queue up. Own pieces still block, because with a single queued
+   * premove they cannot have moved by the time it runs.
+   *
+   * Unlike `legalMoves` this does not care whose turn it is - a premove is by
+   * definition made out of turn.
+   */
+  function premoveTargets(state, from) {
+    const [r, c] = from;
+    const piece = state.board[r]?.[c];
+    if (!piece) return [];
+    const color = colorOf(piece), type = typeOf(piece);
+
+    const blocked = (rr, cc) => {
+      const other = state.board[rr][cc];
+      return !!other && colorOf(other) === color;
+    };
+
+    const targets = [];
+    const offer = (rr, cc) => { if (inBounds(rr, cc) && !blocked(rr, cc)) targets.push([rr, cc]); };
+
+    if (type === 'p') {
+      const dir = color === 'white' ? -1 : 1;
+      const start = color === 'white' ? 6 : 1;
+      if (inBounds(r + dir, c) && !blocked(r + dir, c)) {
+        targets.push([r + dir, c]);
+        if (r === start && inBounds(r + 2 * dir, c) && !blocked(r + 2 * dir, c)) targets.push([r + 2 * dir, c]);
+      }
+      // Both diagonals are offered even with nothing on them: the capture a
+      // premove waits for is the opponent's move that has not happened yet.
+      for (const dc of [-1, 1]) offer(r + dir, c + dc);
+      return targets;
+    }
+
+    if (type === 'n') {
+      for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) offer(r + dr, c + dc);
+      return targets;
+    }
+
+    if (type === 'k') {
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        if (dr || dc) offer(r + dr, c + dc);
+      }
+      // Castling is offered from the home square and sorted out on execution;
+      // the rights and the squares in between depend on the reply.
+      const homeRow = color === 'white' ? 7 : 0;
+      if (r === homeRow && c === 4) { offer(homeRow, 6); offer(homeRow, 2); }
+      return targets;
+    }
+
+    const directions = [];
+    if (type === 'b' || type === 'q') directions.push([-1,-1],[-1,1],[1,-1],[1,1]);
+    if (type === 'r' || type === 'q') directions.push([-1,0],[1,0],[0,-1],[0,1]);
+    for (const [dr, dc] of directions) {
+      let rr = r + dr, cc = c + dc;
+      while (inBounds(rr, cc) && !blocked(rr, cc)) {
+        targets.push([rr, cc]);
+        rr += dr; cc += dc;
+      }
+    }
+    return targets;
+  }
+
+  /**
+   * The complete six-field FEN.
+   *
+   * `fenKey` deliberately stops after four fields: repetition detection must
+   * ignore the move counters, or a position reached with a different halfmove
+   * clock would not count as the same position. Everything that needs to
+   * round-trip a game - Stockfish, PGN, save/restore - needs all six.
+   */
+  function toFen(state) {
+    return `${fenKey(state)} ${state.halfmove} ${state.fullmove}`;
+  }
+
+  const FEN_PIECES = new Set(['r','n','b','q','k','p','R','N','B','Q','K','P']);
+
+  /**
+   * Parses a FEN into a state, rejecting anything malformed.
+   *
+   * This is the entry point for text a person typed or pasted, so every field
+   * is checked. A silently mis-parsed FEN would produce a board that looks
+   * plausible and then generates illegal moves.
+   */
+  function fromFen(fen) {
+    if (typeof fen !== 'string') throw new Error('FEN muss Text sein');
+    const parts = fen.trim().split(/\s+/);
+    if (parts.length < 4) throw new Error('FEN unvollständig: mindestens vier Felder erwartet');
+
+    const [placement, turnField, castleField, epField] = parts;
+    const rows = placement.split('/');
+    if (rows.length !== 8) throw new Error('FEN muss genau acht Reihen beschreiben');
+
+    const board = [];
+    for (const row of rows) {
+      const cells = [];
+      for (const ch of row) {
+        if (ch >= '1' && ch <= '8') {
+          for (let i = 0; i < Number(ch); i++) cells.push(null);
+        } else if (FEN_PIECES.has(ch)) {
+          cells.push(ch);
+        } else {
+          throw new Error(`Unbekanntes Zeichen in der Stellung: ${ch}`);
+        }
+      }
+      if (cells.length !== 8) throw new Error(`Reihe "${row}" beschreibt ${cells.length} statt 8 Felder`);
+      board.push(cells);
+    }
+
+    if (turnField !== 'w' && turnField !== 'b') throw new Error('Zugrecht muss "w" oder "b" sein');
+    if (!/^(-|[KQkq]{1,4})$/.test(castleField)) throw new Error('Ungültige Rochaderechte');
+    if (!/^(-|[a-h][36])$/.test(epField)) throw new Error('Ungültiges en-passant-Feld');
+
+    const halfmove = parts.length > 4 ? Number(parts[4]) : 0;
+    const fullmove = parts.length > 5 ? Number(parts[5]) : 1;
+    if (!Number.isInteger(halfmove) || halfmove < 0) throw new Error('Ungültige Halbzugregel');
+    if (!Number.isInteger(fullmove) || fullmove < 1) throw new Error('Ungültige Zugnummer');
+
+    const state = {
+      board,
+      turn: turnField === 'w' ? 'white' : 'black',
+      castling: {
+        K: castleField.includes('K'), Q: castleField.includes('Q'),
+        k: castleField.includes('k'), q: castleField.includes('q')
+      },
+      ep: epField === '-' ? null : parseSquare(epField),
+      halfmove,
+      fullmove
+    };
+
+    // A position without both kings is not a chess position: legalMoves and
+    // every check test would dereference null. Rejecting it here keeps that
+    // failure at the entry point rather than deep inside the search.
+    if (!findKing(state, 'white') || !findKing(state, 'black')) {
+      throw new Error('Die Stellung braucht beide Könige');
+    }
+    // The side that just moved must not still be in check - that position can
+    // never arise in a real game and would let the mover be captured.
+    if (isInCheck(state, opponent(state.turn))) {
+      throw new Error('Die Seite, die nicht am Zug ist, steht im Schach');
+    }
+    return state;
   }
 
   function insufficientMaterial(state) {
@@ -270,7 +447,7 @@
 
   const api={
     FILES, PIECE_NAMES, createInitialState, cloneState, colorOf, typeOf, opponent, squareName, parseSquare,
-    isSquareAttacked, isInCheck, findKing, legalMoves, findLegalMove, applyMove, fenKey, status, sanForMove, insufficientMaterial
+    isSquareAttacked, isInCheck, findKing, legalMoves, movesBetween, findLegalMove, applyMove, premoveTargets, fenKey, toFen, fromFen, status, sanForMove, insufficientMaterial
   };
   global.ChessEngine=api;
 // The engine is pure logic with no DOM access, so it must also load inside a

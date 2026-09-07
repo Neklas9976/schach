@@ -136,3 +136,167 @@ test('every piece-square table is a full 8x8 grid', () => {
     }
   }
 });
+
+/* ------------------------------------------------------------------ *
+ * Engine selection
+ * ------------------------------------------------------------------ *
+ * These load ai.js into a fresh sandbox per test. The module reads its
+ * settings once at load time, so a shared instance could not express
+ * "what happens on a cold start with a native engine installed".
+ */
+
+function loadAI({ engineAvailable = false, serverFails = false, builtinFails = false, stored = {} } = {}) {
+  const storage = new Map(Object.entries(stored).map(([k, v]) => [k, JSON.stringify(v)]));
+  const events = [];
+  const requests = [];
+
+  const sandbox = {
+    window: {},
+    localStorage: {
+      getItem: k => (storage.has(k) ? storage.get(k) : null),
+      setItem: (k, v) => storage.set(k, v)
+    },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
+    async fetch(url, init) {
+      if (url === '/api/engine/status') {
+        requests.push({ url });
+        return {
+          ok: true,
+          json: async () => (engineAvailable
+            ? { available: true, path: '/opt/sf/stockfish.exe', file: 'stockfish.exe', name: 'Stockfish 19' }
+            : { available: false, reason: 'Keine Engine gefunden.' })
+        };
+      }
+      if (url === '/api/engine/bestmove') {
+        requests.push(JSON.parse(init.body));
+        if (serverFails) return { ok: false, status: 503, json: async () => ({ error: 'Engine weg' }) };
+        return { ok: true, json: async () => ({ bestmove: 'e2e4', depth: 20, score_cp: 31, mate: null }) };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    },
+    // Stands in for ai-worker.js: answers 1.e2e4, or dies like a real worker.
+    Worker: class {
+      constructor() { this.onmessage = null; this.onerror = null; }
+      postMessage(msg) {
+        Promise.resolve().then(() => {
+          if (builtinFails) { this.onerror(new Error('Worker abgestürzt')); return; }
+          this.onmessage({
+            data: { type: 'result', id: msg.id, result: { move: { from: [6, 4], to: [4, 4], promotion: null } } }
+          });
+        });
+      }
+      terminate() {}
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window.dispatchEvent = event => { events.push(event); return true; };
+
+  vm.runInNewContext(engineCode, sandbox);
+  vm.runInNewContext(aiCode, sandbox);
+  return { AI: sandbox.window.ChessAI, E: sandbox.window.ChessEngine, events, requests, storage };
+}
+
+test('every level carries a Stockfish strength cap in the engine range', () => {
+  for (const level of AI.LEVELS) {
+    if (level.elo === null) continue;
+    assert.ok(level.elo >= 1320 && level.elo <= 3190, `level ${level.id} elo must be a value Stockfish accepts`);
+  }
+  assert.equal(AI.LEVELS[AI.LEVELS.length - 1].elo, null, 'the top level must play uncapped');
+});
+
+test('the strength cap rises with the level', () => {
+  const capped = AI.LEVELS.filter(l => l.elo !== null);
+  for (let i = 1; i < capped.length; i++) {
+    assert.ok(capped[i].elo > capped[i - 1].elo, `level ${capped[i].id} must be stronger than the one below`);
+  }
+});
+
+test('a cold start switches to the native engine when one is installed', async () => {
+  // Why this exists at all: defaulting straight to 'server' would break every
+  // installation without a binary, so the upgrade has to be a probe.
+  const { AI: ai } = loadAI({ engineAvailable: true });
+  assert.equal(ai.getSettings().backend, 'builtin');
+  assert.equal(await ai.autoSelectBackend(), 'server');
+  assert.equal(ai.getSettings().backend, 'server');
+});
+
+test('a cold start stays on the built-in engine when none is installed', async () => {
+  const { AI: ai } = loadAI({ engineAvailable: false });
+  assert.equal(await ai.autoSelectBackend(), 'builtin');
+});
+
+test('auto-selection never overrules an engine the player picked', async () => {
+  const { AI: ai } = loadAI({
+    engineAvailable: true,
+    stored: { 'chess-ai-backend': 'builtin', 'chess-ai-backend-pinned': true }
+  });
+  assert.equal(await ai.autoSelectBackend(), 'builtin');
+});
+
+test('choosing an engine by hand pins it across restarts', () => {
+  const { AI: ai, storage } = loadAI();
+  ai.chooseBackend('server');
+  assert.equal(ai.getSettings().backend, 'server');
+  assert.equal(storage.get('chess-ai-backend-pinned'), 'true');
+});
+
+test('the native engine is asked for the level\u2019s strength cap', async () => {
+  const { AI: ai, E: engine, requests } = loadAI({ engineAvailable: true });
+  ai.chooseBackend('server');
+  ai.update({ mode: ai.MODES.COMPUTER, level: 4 });
+  await ai.requestMove(engine.createInitialState());
+
+  const searches = requests.filter(r => r.fen);
+  assert.equal(searches.length, 1);
+  assert.equal(searches[0].elo, ai.findLevel(4).elo);
+  assert.equal(searches[0].skill, ai.findLevel(4).skill);
+});
+
+test('a native engine that fails hands the game to the built-in one', async () => {
+  // A crashed subprocess or a restarted server must not cost the player the
+  // game: the move still has to arrive, from whichever engine still works.
+  const { AI: ai, E: engine, events } = loadAI({ engineAvailable: true, serverFails: true });
+  ai.chooseBackend('server');
+  ai.update({ mode: ai.MODES.COMPUTER });
+
+  const move = await ai.requestMove(engine.createInitialState());
+  assert.ok(move, 'the built-in engine must supply a move after the native one failed');
+  assert.deepEqual([...move.from], [6, 4]);
+  assert.equal(ai.getSettings().backend, 'builtin');
+  assert.ok(events.some(e => e.type === 'chess-ai-backend-fallback'), 'the player must be told');
+});
+
+test('a failing built-in engine surfaces instead of falling back to itself', async () => {
+  // The fallback must not become a loop: builtin is the last resort, so its
+  // failure has to reach the caller, which turns it into a visible message.
+  const { AI: ai, E: engine } = loadAI({ builtinFails: true });
+  ai.update({ mode: ai.MODES.COMPUTER });
+
+  await assert.rejects(ai.requestMove(engine.createInitialState()));
+  assert.equal(ai.getSettings().backend, 'builtin');
+  // The guard must be released, or the game would never ask again.
+  assert.equal(ai.isThinking(), false);
+});
+
+test('callers asking for the engine status at once share one request', () => {
+  // Three separate things ask on every page load. Three round trips for one
+  // answer is wasteful, and three answers can disagree with each other.
+  const { AI: ai, requests } = loadAI({ engineAvailable: true });
+  const answers = Promise.all([ai.serverEngineStatus(), ai.serverEngineStatus(), ai.serverEngineStatus()]);
+  assert.equal(requests.filter(r => r.url === '/api/engine/status').length, 1);
+  return answers.then(all => {
+    assert.equal(all.length, 3);
+    for (const status of all) assert.equal(status.available, true);
+  });
+});
+
+test('a later question still reaches the server', () => {
+  // Caching the answer would survive dropping Stockfish into place, which is
+  // the one moment the answer has to change.
+  const { AI: ai, requests } = loadAI({ engineAvailable: false });
+  const count = () => requests.filter(r => r.url === '/api/engine/status').length;
+  return ai.serverEngineStatus()
+    .then(() => new Promise(resolve => setTimeout(resolve, 0)))
+    .then(() => ai.serverEngineStatus())
+    .then(() => assert.equal(count(), 2));
+});

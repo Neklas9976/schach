@@ -15,13 +15,19 @@ Hier gehört die native Schach-Engine hinein (empfohlen: Stockfish).
    ```
 
    Unterordner werden bis drei Ebenen tief durchsucht. Der Dateiname muss mit
-   `stockfish` beginnen und eine Programmdatei sein (`.exe` oder ohne
-   Endung) – Textdateien wie `Copying.txt` werden ignoriert.
+   `stockfish` beginnen und eine Programmdatei sein (`.exe`, `.bin` oder ohne
+   Endung; unter Windows zusätzlich `.bat`/`.cmd` für einen Wrapper, der die
+   Engine mit festen Optionen startet) – Textdateien wie `Copying.txt` werden
+   ignoriert.
 3. Den Server neu starten.
-4. In der App unter **Einstellungen → Spielmodus → Engine** den Eintrag
-   **Stockfish nativ (volle Stärke)** auswählen.
 
-Ob die Engine gefunden wurde, steht direkt im Hinweistext unter der Auswahl.
+Mehr ist nicht nötig: Die App fragt beim Start `/api/engine/status` ab und
+schaltet automatisch auf die native Engine um, sobald eine gefunden wird. Nur
+wenn unter **Einstellungen → Spielmodus → Engine** einmal von Hand etwas
+ausgewählt wurde, bleibt diese Wahl bestehen und wird nicht überschrieben.
+
+Ob die Engine gefunden wurde, steht im Hinweistext unter der Auswahl – dort
+erscheint dann der Name, den die Engine selbst meldet (z. B. „Stockfish 19").
 
 ## Alternativer Pfad
 
