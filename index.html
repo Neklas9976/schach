@@ -59,6 +59,26 @@
 
                     <div class="opening-name" id="opening-name" hidden></div>
 
+                    <div class="puzzle-card" id="puzzle-card" hidden>
+                        <div class="puzzle-head">
+                            <div>
+                                <div class="status-kicker">TAKTIK</div>
+                                <div class="puzzle-title" id="puzzle-title">Weiß am Zug</div>
+                            </div>
+                            <div class="puzzle-badge" id="puzzle-badge" title="Schwierigkeit dieser Aufgabe">1200</div>
+                        </div>
+                        <div class="puzzle-feedback" id="puzzle-feedback" aria-live="polite">Finde den besten Zug.</div>
+                        <div class="puzzle-steps" id="puzzle-steps" aria-hidden="true"></div>
+                        <div class="puzzle-meta" id="puzzle-meta"></div>
+                        <div class="action-row puzzle-actions">
+                            <button class="action-button secondary" id="puzzle-hint" type="button" title="Die gesuchte Figur zeigen">💡 Hinweis</button>
+                            <button class="action-button secondary" id="puzzle-solution" type="button" title="Lösung vorführen">👁 Lösung</button>
+                            <button class="action-button secondary" id="puzzle-retry" type="button" title="Aufgabe neu beginnen">↻ Nochmal</button>
+                            <button class="action-button primary" id="puzzle-next" type="button">Nächste ▸</button>
+                        </div>
+                        <button class="action-button secondary wide puzzle-exit" id="puzzle-exit" type="button">Training beenden</button>
+                    </div>
+
                     <div class="moves-card">
                         <div class="card-heading">
                             <h2>Züge</h2>
@@ -97,6 +117,7 @@
                             <div class="action-row">
                                 <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
                                 <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
+                                <button class="action-button secondary" id="puzzle-btn" type="button" title="Taktik-Training (T)">🧩 Puzzle</button>
                                 <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN &amp; FEN</button>
                                 <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
                             </div>
@@ -170,6 +191,35 @@
                 <span id="archive-count"></span>
                 <button class="action-button secondary" id="archive-clear" type="button">Alle löschen</button>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="puzzle-overlay" hidden>
+        <div class="puzzle-modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-modal-title">
+            <div class="settings-header">
+                <div>
+                    <div class="status-kicker">TRAINING</div>
+                    <h2 id="puzzle-modal-title">Taktik</h2>
+                    <div class="appearance-current">Stellungen aus echten Partien – jede Lösung von Stockfish geprüft</div>
+                </div>
+                <button class="icon-button" id="puzzle-modal-close" type="button" aria-label="Schließen">×</button>
+            </div>
+
+            <div class="stat-grid" id="puzzle-stats"></div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Thema</h3>
+                    <p>Ohne Auswahl kommt alles gemischt – passend zu deiner Wertung.</p>
+                </div>
+                <div class="puzzle-themes" id="puzzle-themes"></div>
+            </div>
+
+            <div class="puzzle-modal-footer">
+                <button class="action-button secondary" id="puzzle-reset" type="button">Fortschritt zurücksetzen</button>
+                <button class="action-button primary" id="puzzle-start" type="button">Training starten</button>
+            </div>
+            <div class="settings-hint" id="puzzle-modal-hint"></div>
         </div>
     </div>
 
@@ -420,6 +470,7 @@
     <script src="static/archive.js"></script>
     <script src="static/clock.js"></script>
     <script src="static/ai.js"></script>
+    <script src="static/puzzles.js"></script>
     <script src="static/app.js"></script>
 </body>
 </html>

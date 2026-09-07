@@ -24,6 +24,30 @@
   const evalFill=document.getElementById('eval-fill');
   const evalScore=document.getElementById('eval-score');
 
+  // Taktik-Training. Steht hier oben bei den uebrigen Griffen, weil render()
+  // die Karte mitzeichnet - eine erst weiter unten deklarierte Konstante waere
+  // beim ersten Zeichnen noch nicht vorhanden.
+  const puzzleCard=document.getElementById('puzzle-card');
+  const puzzleTitle=document.getElementById('puzzle-title');
+  const puzzleBadge=document.getElementById('puzzle-badge');
+  const puzzleFeedback=document.getElementById('puzzle-feedback');
+  const puzzleSteps=document.getElementById('puzzle-steps');
+  const puzzleMeta=document.getElementById('puzzle-meta');
+  const puzzleOverlay=document.getElementById('puzzle-overlay');
+  const puzzleStatsEl=document.getElementById('puzzle-stats');
+  const puzzleThemesEl=document.getElementById('puzzle-themes');
+  const puzzleModalHint=document.getElementById('puzzle-modal-hint');
+  const puzzleNextBtn=document.getElementById('puzzle-next');
+  const puzzleRetryBtn=document.getElementById('puzzle-retry');
+  const puzzleHintBtn=document.getElementById('puzzle-hint');
+  const puzzleSolutionBtn=document.getElementById('puzzle-solution');
+
+  /** Der laufende Trainingszustand, oder null ausserhalb des Trainings. */
+  let puzzleMode=null;
+  /** Vom Anwender im Trainingsfenster gewaehltes Thema. */
+  let puzzleTheme=null;
+
+
   let suppressNextClick=false;
   let activePointerId=null;
   // Square a right-button drag started on, while an annotation is being drawn.
@@ -58,6 +82,9 @@
   // position that does not exist yet, and the deeper it got the more often it
   // would simply be thrown away.
   let premove=null;
+  // Der zuletzt aufs Brett gelegte Zug. Die Zugliste haelt nur from/to und
+  // die Notation; das Training braucht den Zug selbst, samt Umwandlung.
+  let lastCommittedMove=null;
 
   /** See ai.js assetPath: a leading slash breaks every project-page deploy. */
   function staticUrl(name){ return new URL(`static/${name}`,document.baseURI).href; }
@@ -132,6 +159,13 @@
    * refuse the premove or accept a move for the opponent.
    */
   function inputColor(){
+    if(puzzleMode){
+      // Kein Premove, keine Gegenfarbe, nichts waehrend das Programm zieht:
+      // eine Aufgabe hat genau einen Spieler und genau eine Reihenfolge.
+      if(puzzleMode.status!=='playing'||puzzleMode.busy) return null;
+      if(moveTransaction||pendingPromotion||!isLive()) return null;
+      return state.turn===puzzleMode.side?puzzleMode.side:null;
+    }
     if(humanMayAct()) return state.turn;
     if(canPremove()) return window.ChessAI.getSettings().humanColor;
     return null;
@@ -701,6 +735,7 @@
     history.push(previous);
     repetition=nextRepetition;
     movesLog.push({from:move.from,to:move.to,notation});
+    lastCommittedMove=move;
     state=next;
     selected=null;
     // A move always returns the board to the live position; annotations and a
@@ -711,7 +746,7 @@
     viewPly=movesLog.length;arrows=[];marks=[];hintMove=null;
     gameEnded=['checkmate','stalemate','fifty-move','threefold','insufficient-material'].includes(nextStatus.type);
 
-    if(window.ChessClock){
+    if(window.ChessClock && !puzzleMode){
       const mover=ChessEngine.colorOf(piece);
       if(gameEnded) window.ChessClock.stop();
       else window.ChessClock.onMoveMade(mover,state.turn);
@@ -780,6 +815,9 @@
    */
   let aiGeneration=0;
   async function maybeRequestComputerMove(){
+    // Die Gegenzuege einer Aufgabe stehen fest; eine Engine, die hier
+    // dazwischenspielt, wuerde die Loesung zerstoeren.
+    if(puzzleMode) return;
     if(!window.ChessAI || !window.ChessAI.isComputerTurn(state.turn)) return;
     if(gameEnded || moveTransaction || pendingPromotion || window.ChessAI.isThinking()) return;
 
@@ -818,6 +856,7 @@
   }
 
   function updateStatus(st,vs){
+    paintPuzzleCard();
     statusCard.classList.remove('check-state','game-over');
     // While the player is looking back through the game, the status line
     // describes the position on screen, not the result of the game.
@@ -889,9 +928,22 @@
       movesList.innerHTML='<div class="empty-moves">Noch keine Züge gespielt.</div>';
       return;
     }
+    // Aus welcher Stellung die Partie kommt, entscheidet ueber die Nummern:
+    // eine geladene Stellung mit Schwarz am Zug beginnt weder bei 1. noch mit
+    // einem weissen Zug, und ohne das rutscht die ganze Liste um einen Halbzug.
+    const fields=String(startingFen).split(' ');
+    const blackFirst=fields[1]==='b';
+    const firstNumber=Number(fields[5])||1;
     let html='';
-    for(let i=0;i<movesLog.length;i+=2){
-      html+=`<div class="move-row"><span class="move-number">${Math.floor(i/2)+1}.</span>${moveCellHtml(i)}${moveCellHtml(i+1)}</div>`;
+    let i=0;
+    if(blackFirst){
+      html+=`<div class="move-row"><span class="move-number">${firstNumber}.</span>`+
+        `<span class="move-cell move-skipped">…</span>${moveCellHtml(0)}</div>`;
+      i=1;
+    }
+    for(;i<movesLog.length;i+=2){
+      const number=firstNumber+(blackFirst?Math.floor((i+1)/2):Math.floor(i/2));
+      html+=`<div class="move-row"><span class="move-number">${number}.</span>${moveCellHtml(i)}${moveCellHtml(i+1)}</div>`;
     }
     movesList.innerHTML=html;
     const active=movesList.querySelector('.move-link.current');
@@ -989,6 +1041,19 @@
    * turn first, and only if there is none does the engine get asked.
    */
   function afterMoveSettled(){
+    if(puzzleMode){
+      // Ein vom Programm gespielter Zug kann eine Fortsetzung angehaengt
+      // haben - die Loesungsvorfuehrung laeuft so Schritt fuer Schritt ab.
+      const queued=puzzleMode.afterReply;
+      puzzleMode.afterReply=null;
+      if(queued){ puzzleMode.busy=false; paintPuzzleCard(); queued(); return; }
+      // `busy` bleibt hier stehen: puzzleAfterMove liest daran ab, ob der Zug
+      // vom Programm kam. Wer es vorher loescht, laesst den Zug, der in die
+      // Stellung fuehrt, als Loesungsversuch durchgehen - und die Aufgabe
+      // gilt als verpatzt, bevor der Spieler sie ueberhaupt gesehen hat.
+      puzzleAfterMove();
+      return;
+    }
     if(runPremove()) return;
     maybeRequestComputerMove();
   }
@@ -1185,6 +1250,9 @@
    * ===================================================================== */
 
   function evalEnabled(){
+    // Waehrend einer Aufgabe waere der Balken die Loesung: er zeigt an, dass
+    // hier etwas zu holen ist, und nach dem richtigen Zug schlaegt er aus.
+    if(puzzleMode) return false;
     try { return JSON.parse(localStorage.getItem('chess-eval-bar')||'false')===true; }
     catch { return false; }
   }
@@ -1248,6 +1316,11 @@
 
   function newGame(){
     if(moveTransaction)return;
+    if(puzzleMode){
+      puzzleMode=null;
+      document.body.classList.remove('puzzle-active');
+      if(puzzleCard) puzzleCard.hidden=true;
+    }
     aiGeneration++;
     setThinking(false);
     state=ChessEngine.createInitialState();history=[];movesLog=[];selected=null;
@@ -1486,6 +1559,7 @@
 
   /** Writes the finished game to the archive, replacing its own earlier entry. */
   function archiveFinishedGame(outcome,reason){
+    if(puzzleMode) return null;
     if(!window.ChessArchive||!window.ChessNotation||!movesLog.length) return null;
     const computerGame=!!(window.ChessAI&&window.ChessAI.isComputerGame());
     const settings=window.ChessAI?window.ChessAI.getSettings():null;
@@ -1544,6 +1618,9 @@
 
   function showGameOver(st){
     if(!gameOverOverlay) return;
+    // Ein Matt ist im Training die Loesung, nicht das Ende einer Partie - und
+    // eine Aufgabe gehoert auch nicht ins Partiearchiv.
+    if(puzzleMode) return;
     const outcome=describeOutcome(st);
     if(!outcome) return;
 
@@ -1885,6 +1962,7 @@
    * ===================================================================== */
 
   async function showHint(){
+    if(puzzleMode){ puzzleHint(); return; }
     if(!isLive()||gameEnded){ return; }
     const target=shownState();
     try{
@@ -2177,7 +2255,8 @@
       case 'h': case 'H': showHint(); break;
       case 's': case 'S': openPgn(); break;
       case 'p': case 'P': openArchive(); break;
-      case 'Escape': closePgn(); closeArchive(); closeGameOver(); closePromotion(); break;
+      case 't': case 'T': openPuzzleDialog(); break;
+      case 'Escape': closePgn(); closeArchive(); closeGameOver(); closePromotion(); closePuzzleDialog(); break;
       default: return;
     }
     e.preventDefault();
@@ -2187,6 +2266,355 @@
   // arrow the player tries to draw. The drawing itself lives in the shared
   // pointer handlers above.
   boardEl.addEventListener('contextmenu',e=>e.preventDefault());
+
+  /* ===================================================================== *
+   * Puzzles
+   * ===================================================================== *
+   *
+   * Das Training laeuft auf demselben Brett wie eine Partie - dieselben
+   * Figuren, dieselbe Animation, derselbe Klang. Ein eigenes Brett daneben
+   * waere die zweite Wahrheit, die frueher oder spaeter von der ersten
+   * abweicht.
+   *
+   * Sichtbar wird das an den Stellen, die *anders* laufen muessen: waehrend
+   * einer Aufgabe zieht kein Computergegner, der Bewertungsbalken bleibt aus
+   * (er wuerde die Loesung verraten), die Uhr laeuft nicht und beendete
+   * Partien landen nicht im Archiv.
+   */
+
+  function puzzleReady(){ return !!window.ChessPuzzles; }
+
+  function moveToUci(move){
+    return window.ChessAI ? window.ChessAI.toUci(move)
+      : ChessEngine.squareName(move.from[0],move.from[1])+ChessEngine.squareName(move.to[0],move.to[1]);
+  }
+
+  function uciToSquares(uci){
+    return {
+      from:window.ChessAI.parseUciSquare(uci.slice(0,2)),
+      to:window.ChessAI.parseUciSquare(uci.slice(2,4)),
+      promotion:uci.length>4?uci[4]:null
+    };
+  }
+
+  /** Sucht zu einem UCI-Zug den passenden Zug der Regel-Engine. */
+  function resolveUci(fromState,uci){
+    const {from,to,promotion}=uciToSquares(uci);
+    const candidates=ChessEngine.movesBetween(fromState,from,to);
+    if(!candidates.length) return null;
+    if(promotion){
+      return candidates.find(m=>m.promotion&&String(m.promotion).toLowerCase()===promotion)||candidates[0];
+    }
+    return candidates[0];
+  }
+
+  /* --- Ablauf ------------------------------------------------------------ */
+
+  function startPuzzle(puzzle){
+    if(!puzzle||moveTransaction) return;
+    const position=ChessEngine.fromFen(puzzle.fen);
+    puzzleMode={
+      session:window.ChessPuzzles.createSession(puzzle),
+      side:position.turn,
+      status:'playing',
+      // `busy` deckt beides ab: den Zug, der in die Stellung fuehrt, und die
+      // Antworten des Gegners. Solange er gesetzt ist, gehoert das Brett dem
+      // Programm und nicht der Maus.
+      busy:false,
+      ratingBefore:window.ChessPuzzles.readProgress().rating,
+      ratingAfter:null
+    };
+    document.body.classList.add('puzzle-active');
+    setFlipped(position.turn==='black');
+    window.ChessClock?.stop?.();
+
+    // Der Gegnerzug, der in die Stellung gefuehrt hat, wird vorgespielt. Eine
+    // Aufgabe, die aus einer Partie kommt, soll sich auch so anfuehlen - und
+    // der letzte Zug des Gegners ist die halbe Information.
+    if(puzzle.setupFen&&puzzle.lastMove){
+      loadGame(puzzle.setupFen,[]);
+      const intro=resolveUci(state,puzzle.lastMove);
+      if(intro){
+        puzzleMode.busy=true;
+        paintPuzzleCard();
+        window.setTimeout(()=>{ if(puzzleMode) commitMove(intro); },260);
+        return;
+      }
+    }
+    loadGame(puzzle.fen,[]);
+    paintPuzzleCard();
+  }
+
+  function exitPuzzle(){
+    if(!puzzleMode) return;
+    puzzleMode=null;
+    document.body.classList.remove('puzzle-active');
+    if(puzzleCard) puzzleCard.hidden=true;
+    newGame();
+  }
+
+  function nextPuzzle(){
+    if(!puzzleReady()) return;
+    const previous=puzzleMode?puzzleMode.session.puzzle.id:null;
+    const puzzle=window.ChessPuzzles.pick({theme:puzzleTheme,exclude:previous});
+    if(!puzzle){ setPuzzleFeedback('Keine passende Aufgabe gefunden.'); return; }
+    startPuzzle(puzzle);
+  }
+
+  function retryPuzzle(){
+    if(!puzzleMode) return;
+    startPuzzle(puzzleMode.session.puzzle);
+  }
+
+  /** Nimmt genau einen Halbzug zurueck - der falsche Versuch verschwindet. */
+  function puzzleTakeBack(){
+    if(!history.length) return;
+    const previous=history.pop();
+    state=previous.state;repetition=previous.repetition;movesLog=previous.movesLog;
+    selected=null;gameEnded=false;timeoutResult=null;resignedBy=null;
+    viewPly=movesLog.length;arrows=[];marks=[];hintMove=null;premove=null;
+    render();
+  }
+
+  /**
+   * Wird aufgerufen, sobald ein Zug endgueltig auf dem Brett liegt.
+   *
+   * Drei Faelle: der Zug des Programms (Vorspiel oder Gegnerantwort), der
+   * richtige Zug des Spielers, der falsche.
+   */
+  function puzzleAfterMove(){
+    if(!puzzleMode) return;
+    if(puzzleMode.busy){ puzzleMode.busy=false; paintPuzzleCard(); return; }
+    if(puzzleMode.status!=='playing') { paintPuzzleCard(); return; }
+
+    const played=lastCommittedMove;
+    if(!played) return;
+    const mates=ChessEngine.status(state,repetition).type==='checkmate';
+    const outcome=puzzleMode.session.submit(moveToUci(played),{mates});
+
+    if(outcome.result==='wrong'){
+      window.ChessSound?.play('illegal');
+      puzzleCard?.classList.add('is-wrong');
+      window.setTimeout(()=>puzzleCard?.classList.remove('is-wrong'),600);
+      puzzleMode.lastWrong=true;
+      puzzleTakeBack();
+      setPuzzleFeedback('Das war es nicht – versuch es noch einmal.');
+      return;
+    }
+
+    puzzleMode.lastWrong=false;
+    if(outcome.result==='correct'){
+      playPuzzleReply(outcome.reply);
+      return;
+    }
+
+    if(outcome.result==='solved'){
+      if(outcome.reply){ playPuzzleReply(outcome.reply,()=>finishPuzzle(true)); return; }
+      finishPuzzle(true);
+    }
+  }
+
+  function playPuzzleReply(uci,then){
+    if(!uci||!puzzleMode){ if(then) then(); return; }
+    puzzleMode.busy=true;
+    paintPuzzleCard();
+    window.setTimeout(()=>{
+      if(!puzzleMode) return;
+      const move=resolveUci(state,uci);
+      if(!move){ puzzleMode.busy=false; if(then) then(); return; }
+      if(then) puzzleMode.afterReply=then;
+      commitMove(move);
+    },340);
+  }
+
+  function finishPuzzle(solved){
+    if(!puzzleMode) return;
+    const session=puzzleMode.session;
+    puzzleMode.status=solved?'solved':'failed';
+    const progress=window.ChessPuzzles.record(session.puzzle,session.outcome(solved));
+    puzzleMode.ratingAfter=progress.rating;
+    window.ChessSound?.play(solved&&!session.usedHint?'gameEndWin':'notify');
+    if(solved){
+      puzzleCard?.classList.add('is-solved');
+      window.setTimeout(()=>puzzleCard?.classList.remove('is-solved'),900);
+    }
+    paintPuzzleCard();
+  }
+
+  /** Fuehrt die restliche Loesung vor; die Aufgabe gilt danach als verfehlt. */
+  function showPuzzleSolution(){
+    if(!puzzleMode||puzzleMode.status!=='playing'||puzzleMode.busy) return;
+    const remaining=puzzleMode.session.giveUp();
+    puzzleMode.status='failed';
+    const progress=window.ChessPuzzles.record(puzzleMode.session.puzzle,
+      puzzleMode.session.outcome(false));
+    puzzleMode.ratingAfter=progress.rating;
+    puzzleMode.busy=true;
+    paintPuzzleCard();
+
+    let index=0;
+    const step=()=>{
+      if(!puzzleMode||index>=remaining.length){
+        if(puzzleMode) puzzleMode.busy=false;
+        paintPuzzleCard();
+        return;
+      }
+      const move=resolveUci(state,remaining[index++]);
+      if(!move){ if(puzzleMode) puzzleMode.busy=false; paintPuzzleCard(); return; }
+      puzzleMode.busy=true;
+      puzzleMode.afterReply=()=>window.setTimeout(step,420);
+      commitMove(move);
+    };
+    window.setTimeout(step,200);
+  }
+
+  function puzzleHint(){
+    if(!puzzleMode||puzzleMode.status!=='playing'||puzzleMode.busy) return;
+    const uci=puzzleMode.session.hint();
+    if(!uci) return;
+    const {from}=uciToSquares(uci);
+    // Nur das Ausgangsfeld. Der ganze Zug waere die Loesung, nicht ein Hinweis.
+    selected=[from[0],from[1]];
+    render();
+    setPuzzleFeedback(`Die gesuchte Figur steht auf ${ChessEngine.squareName(from[0],from[1])}.`);
+  }
+
+  /* --- Anzeige ----------------------------------------------------------- */
+
+  function setPuzzleFeedback(text){
+    if(puzzleFeedback) puzzleFeedback.textContent=text;
+  }
+
+  function puzzleThemeText(puzzle){
+    return puzzle.themes.map(t=>window.ChessPuzzles.themeLabel(t)).join(' · ');
+  }
+
+  function paintPuzzleCard(){
+    if(!puzzleCard) return;
+    puzzleCard.hidden=!puzzleMode;
+    if(!puzzleMode) return;
+
+    const session=puzzleMode.session;
+    const puzzle=session.puzzle;
+    const playing=puzzleMode.status==='playing';
+    const toMove=puzzleMode.side==='white'?'Weiß':'Schwarz';
+
+    puzzleTitle.textContent=playing?`${toMove} zieht und gewinnt`:(
+      puzzleMode.status==='solved'?'Gelöst':'Lösung');
+    puzzleBadge.textContent=puzzle.rating;
+
+    // Ein Punkt je gesuchtem Zug: gefunden, aktuell, offen.
+    if(puzzleSteps){
+      const total=session.totalMoves;
+      const done=playing?Math.floor(session.index/2):total;
+      let html='';
+      for(let i=0;i<total;i++){
+        const cls=i<done?'done':(i===done&&playing?'current':'');
+        html+=`<span class="puzzle-step ${cls}"></span>`;
+      }
+      puzzleSteps.innerHTML=total>1?html:'';
+    }
+
+    if(playing){
+      if(puzzleMode.busy) setPuzzleFeedback('Der Gegner antwortet …');
+      else if(session.index===0){
+        setPuzzleFeedback(puzzle.mateIn
+          ?`Matt in ${puzzle.mateIn} – finde den ersten Zug.`
+          :'Finde den besten Zug.');
+      } else if(!puzzleMode.lastWrong){
+        const left=session.totalMoves-Math.floor(session.index/2);
+        setPuzzleFeedback(left===1?'Richtig – und jetzt der letzte Zug.'
+          :`Richtig. Noch ${left} Züge.`);
+      }
+    } else if(puzzleMode.status==='solved'){
+      const delta=puzzleMode.ratingAfter-puzzleMode.ratingBefore;
+      const sign=delta>0?'+':'';
+      setPuzzleFeedback(session.usedHint
+        ?`Richtig – mit Hilfe, deshalb ohne Wertung (${puzzleMode.ratingAfter}).`
+        :`Gelöst! Wertung ${sign}${delta} → ${puzzleMode.ratingAfter}.`);
+    } else if(!puzzleMode.busy){
+      setPuzzleFeedback(`Wertung jetzt ${puzzleMode.ratingAfter}. Schau dir die Züge in der Liste an.`);
+    }
+
+    if(puzzleMeta){
+      const stats=window.ChessPuzzles.stats();
+      puzzleMeta.innerHTML=`<span>${escapeHtml(puzzleThemeText(puzzle))}</span>`+
+        `<span>Deine Wertung <strong>${stats.rating}</strong> · Serie <strong>${stats.streak}</strong></span>`;
+    }
+
+    puzzleHintBtn.disabled=!playing||puzzleMode.busy;
+    puzzleSolutionBtn.disabled=!playing||puzzleMode.busy;
+    puzzleRetryBtn.disabled=puzzleMode.busy;
+    puzzleNextBtn.disabled=puzzleMode.busy;
+  }
+
+  /* --- Trainingsfenster -------------------------------------------------- */
+
+  function paintPuzzleStats(){
+    if(!puzzleStatsEl) return;
+    const stats=window.ChessPuzzles.stats();
+    const cells=[
+      ['Wertung',stats.rating],
+      ['Gelöst',`${stats.solved} / ${stats.total}`],
+      ['Serie',stats.streak],
+      ['Beste Serie',stats.bestStreak],
+      ['Treffer',stats.accuracy==null?'–':`${stats.accuracy} %`]
+    ];
+    puzzleStatsEl.innerHTML=cells.map(([label,value])=>
+      `<div class="stat-cell"><div class="stat-value">${escapeHtml(String(value))}</div>`+
+      `<div class="stat-label">${escapeHtml(label)}</div></div>`).join('');
+  }
+
+  function paintPuzzleThemes(){
+    if(!puzzleThemesEl) return;
+    const themes=window.ChessPuzzles.availableThemes();
+    const buttons=[['','Alles gemischt']].concat(themes.map(t=>[t,window.ChessPuzzles.themeLabel(t)]));
+    puzzleThemesEl.innerHTML=buttons.map(([value,label])=>{
+      const active=(puzzleTheme||'')===value?' active':'';
+      return `<button type="button" class="puzzle-theme${active}" data-theme="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+    }).join('');
+  }
+
+  async function openPuzzleDialog(){
+    if(!puzzleOverlay||!puzzleReady()) return;
+    puzzleOverlay.hidden=false;
+    puzzleModalHint.textContent='Aufgaben werden geladen …';
+    try{
+      await window.ChessPuzzles.load();
+      const count=window.ChessPuzzles.all().length;
+      puzzleModalHint.textContent=`${count} Aufgaben, alle selbst erzeugt und von Stockfish geprüft.`;
+      paintPuzzleStats();
+      paintPuzzleThemes();
+    }catch(error){
+      puzzleModalHint.textContent=`Die Aufgaben konnten nicht geladen werden: ${error.message}`;
+    }
+  }
+
+  function closePuzzleDialog(){ if(puzzleOverlay) puzzleOverlay.hidden=true; }
+
+  document.getElementById('puzzle-btn')?.addEventListener('click',openPuzzleDialog);
+  document.getElementById('puzzle-modal-close')?.addEventListener('click',closePuzzleDialog);
+  puzzleOverlay?.addEventListener('click',e=>{ if(e.target===puzzleOverlay) closePuzzleDialog(); });
+  puzzleThemesEl?.addEventListener('click',e=>{
+    const button=e.target.closest('.puzzle-theme');
+    if(!button) return;
+    puzzleTheme=button.dataset.theme||null;
+    paintPuzzleThemes();
+  });
+  document.getElementById('puzzle-start')?.addEventListener('click',()=>{
+    closePuzzleDialog();
+    nextPuzzle();
+  });
+  document.getElementById('puzzle-reset')?.addEventListener('click',()=>{
+    window.ChessPuzzles.resetProgress();
+    paintPuzzleStats();
+    puzzleModalHint.textContent='Fortschritt zurückgesetzt.';
+  });
+  puzzleNextBtn?.addEventListener('click',nextPuzzle);
+  puzzleRetryBtn?.addEventListener('click',retryPuzzle);
+  puzzleHintBtn?.addEventListener('click',puzzleHint);
+  puzzleSolutionBtn?.addEventListener('click',showPuzzleSolution);
+  document.getElementById('puzzle-exit')?.addEventListener('click',exitPuzzle);
 
   /* ===================================================================== *
    * Start

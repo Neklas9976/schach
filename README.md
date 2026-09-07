@@ -1,10 +1,46 @@
-# Schachprogramm v3.7
+# Schachprogramm v3.8
 
 Schachprogramm mit vollständigen Regeln, Schachuhr, Computergegner, Partie-Analyse,
-PGN/FEN, Archiv und Sound. Läuft als reine statische Seite – Stockfish rechnet
-als WebAssembly im Browser, es gibt keinen Server.
+Taktik-Training, PGN/FEN, Archiv und Sound. Läuft als reine statische Seite –
+Stockfish rechnet als WebAssembly im Browser, es gibt keinen Server.
 
 **Lizenz:** GNU GPL v3 (siehe `LICENSE`) · **Fremdinhalte:** `ATTRIBUTIONS.md`
+
+## Taktik-Training (v3.8)
+
+Der Knopf **🧩 Puzzle** (oder die Taste `T`) öffnet das Training. Es läuft auf
+demselben Brett wie eine Partie – gleiche Figuren, gleiche Animation, gleicher
+Klang; nur spielt kein Computergegner mit, die Uhr steht, der Bewertungsbalken
+bleibt aus (er wäre die Lösung) und nichts landet im Partiearchiv.
+
+* Jede Aufgabe beginnt mit dem Zug, der in die Stellung geführt hat. Danach ist
+  der Spieler am Zug.
+* Ein falscher Zug wird zurückgenommen, nicht bestraft – man darf es noch einmal
+  versuchen. Erst *Lösung* wertet die Aufgabe als verfehlt.
+* Eine eigene Wertung (Elo, Start 1000) sucht die nächste Aufgabe aus. Wer einen
+  Hinweis nimmt, bekommt die Aufgabe nicht angerechnet: sonst wäre die Wertung
+  nur Dekoration.
+* Themen (Matt in n, Gabel, Opfer, Grundreihenmatt …) lassen sich auswählen.
+* Fortschritt, Wertung und Serie liegen in `localStorage`, also auf dem Gerät.
+
+### Woher die Aufgaben kommen
+
+Aus keiner fremden Sammlung. `tools/make_puzzles.py` lässt zwei absichtlich
+schwach eingestellte Stockfish-Instanzen gegeneinander spielen und sucht aus
+ihren Fehlern die Stellungen heraus, in denen genau ein Zug deutlich gewinnt;
+jede Lösung wird danach auf voller Stärke geprüft. Der Satz lässt sich jederzeit
+neu erzeugen:
+
+```
+python -m pip install chess
+python tools/make_puzzles.py --count 320 --out static/puzzles.json
+```
+
+Der Filter ist bewusst streng: der beste Zug muss den zweitbesten um mindestens
+220 Centipawns schlagen, und ohne ihn darf die Stellung noch nicht gewonnen
+sein. Sonst gäbe es Aufgaben mit mehreren richtigen Lösungen – und eine davon
+als „falsch" zu melden, wäre schlicht verkehrt. Erzwungene Matts haben einen
+eigenen Maßstab, weil dort ohnehin meist schon alles gewonnen ist.
 
 
 Schachprogramm mit vollständigen Regeln, Schachuhr, Computergegner (eingebaut

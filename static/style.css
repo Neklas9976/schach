@@ -1250,3 +1250,121 @@ html.ai-thinking.premove-possible .square { cursor: default; }
    capture is the one move where something simply blinks out of existence
    between two frames. */
 .move-animator.captured { z-index: 88; }
+
+/* ===================================================================== *
+ * Taktik-Training
+ * ===================================================================== */
+
+.puzzle-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+    padding: 16px 17px 14px;
+    display: grid;
+    gap: 12px;
+    /* Der farbige Rand ist die Rueckmeldung: er faerbt sich bei richtig und
+       falsch, ohne dass die Karte springt - eine Groessenaenderung mitten im
+       Loesen wuerde das Brett verschieben. */
+    border-left: 3px solid var(--accent-line);
+    transition: border-left-color .25s ease, background .25s ease;
+}
+
+.puzzle-card.is-wrong { border-left-color: var(--tone-worst); }
+.puzzle-card.is-solved { border-left-color: var(--tone-best); }
+
+.puzzle-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.puzzle-title { font-size: 1.12rem; font-weight: 800; margin-top: 5px; }
+
+.puzzle-badge {
+    flex: none;
+    font-size: .78rem;
+    font-weight: 800;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--layer-3);
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+}
+
+.puzzle-feedback { color: var(--ink-2); font-size: .87rem; min-height: 20px; line-height: 1.45; }
+.puzzle-card.is-wrong .puzzle-feedback { color: var(--tone-worst); }
+.puzzle-card.is-solved .puzzle-feedback { color: var(--tone-best); }
+
+/* Ein Punkt je gesuchtem Zug - so ist ohne Text sichtbar, wie weit die
+   Loesung noch geht. */
+.puzzle-steps { display: flex; gap: 6px; }
+.puzzle-steps:empty { display: none; }
+.puzzle-step {
+    width: 22px; height: 4px; border-radius: 2px;
+    background: var(--layer-4);
+    transition: background .2s ease;
+}
+.puzzle-step.done { background: var(--tone-best); }
+.puzzle-step.current { background: var(--accent); }
+
+.puzzle-meta {
+    display: flex; flex-wrap: wrap; gap: 4px 14px;
+    font-size: .74rem; color: var(--ink-3); font-weight: 600;
+}
+.puzzle-meta strong { color: var(--ink-2); }
+
+.puzzle-actions { grid-template-columns: 1fr 1fr; }
+.puzzle-card .action-button.puzzle-exit { margin-top: 2px; }
+
+/* Waehrend des Trainings ist die Partie pausiert: Knoepfe, die sie
+   veraendern wuerden, gehoeren dann nicht auf den Schirm. */
+body.puzzle-active .status-card,
+body.puzzle-active .opening-name,
+body.puzzle-active .review-card,
+body.puzzle-active .action-groups .action-group:first-child,
+body.puzzle-active #review-btn,
+body.puzzle-active #new-game-btn { display: none; }
+
+body.puzzle-active .help-text::before { content: 'Taktik: '; font-weight: 800; color: var(--ink-2); }
+
+/* --- Trainingsfenster --------------------------------------------------- */
+
+.puzzle-modal {
+    width: min(680px, 94vw);
+    max-height: min(88vh, 860px);
+    overflow: auto;
+    border-radius: 20px;
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
+    padding: 22px;
+    display: grid;
+    gap: 18px;
+}
+
+.puzzle-themes { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.puzzle-theme {
+    font: inherit;
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--ink-2);
+    background: var(--layer-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.puzzle-theme:hover { background: var(--layer-3); }
+.puzzle-theme.active {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+    color: var(--ink);
+}
+
+.puzzle-modal-footer { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.puzzle-modal-footer .action-button { flex: 1 1 200px; }
+
+@media (max-width: 900px) {
+    .puzzle-actions { grid-template-columns: 1fr 1fr; }
+}
+
+/* Der ausgelassene weisse Zug, wenn eine Stellung mit Schwarz am Zug beginnt. */
+.move-cell.move-skipped { color: var(--ink-4); cursor: default; }

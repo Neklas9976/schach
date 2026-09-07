@@ -115,8 +115,16 @@ test('committing still requires the piece to belong to the side to move', () => 
 
 test('a landed move gives the premove its turn before the engine', () => {
   // The other order would let the engine answer a position the player has
-  // already committed a move for.
-  assert.match(code, /function afterMoveSettled\(\)\{\s*if\(runPremove\(\)\) return;\s*maybeRequestComputerMove\(\);/);
+  // already committed a move for. Puzzle mode takes the whole function over
+  // before either of them, so what matters is the order of the two, not that
+  // they sit on adjacent lines.
+  const start = code.indexOf('function afterMoveSettled(){');
+  assert.ok(start >= 0, 'afterMoveSettled not found');
+  const body = code.slice(start, code.indexOf('\n  }', start));
+  const premove = body.indexOf('if(runPremove()) return;');
+  const engine = body.indexOf('maybeRequestComputerMove();');
+  assert.ok(premove >= 0 && engine >= 0, 'both paths must still be reached');
+  assert.ok(premove < engine, 'the premove has to get its turn first');
   assert.equal((code.match(/setTimeout\(maybeRequestComputerMove,duration/g) || []).length, 0);
 });
 

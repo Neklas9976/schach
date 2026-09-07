@@ -112,6 +112,27 @@ hundertmal so groß wie die Originale.
 
 ---
 
+## Taktikaufgaben
+
+`static/puzzles.json` ist **in diesem Projekt selbst erzeugt** worden und stammt
+aus keiner fremden Sammlung – weder von lichess noch von chess.com noch aus
+einer Aufgabendatenbank.
+
+Das Verfahren steht in `tools/make_puzzles.py` und ist nachvollziehbar: zwei
+absichtlich schwach eingestellte Stockfish-Instanzen spielen gegeneinander, und
+aus ihren Fehlern wird jede Stellung herausgesucht, in der genau ein Zug
+deutlich gewinnt. Jede Lösung ist danach von Stockfish auf voller Stärke
+geprüft. Wer den Satz neu erzeugen will, braucht nur eine lokale
+Stockfish-Binärdatei:
+
+```
+python -m pip install chess
+python tools/make_puzzles.py --count 320 --out static/puzzles.json
+```
+
+Schachstellungen und Zugfolgen sind ohnehin keine schutzfähigen Werke – hier
+kommt hinzu, dass sie nirgends abgeschrieben, sondern gerechnet wurden.
+
 ## Brettfarben, Klänge, Eröffnungsnamen
 
 * **Brettfarben:** Zwölf Farbpaare, in diesem Projekt gewählt. Ein
