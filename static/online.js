@@ -104,7 +104,10 @@
   /* --- Verbindung ------------------------------------------------------- */
 
   function status() {
-    if (!socket) return 'offline';
+    // Ohne eingetragenen Server ist "nicht verbunden" irrefuehrend: da wartet
+    // nichts, da fehlt etwas. Die Oberflaeche haengt an dieser Unterscheidung
+    // den Suchknopf und den Hinweistext auf.
+    if (!socket) return serverUrl() ? 'offline' : 'unconfigured';
     if (socket.readyState === 0) return 'connecting';
     if (socket.readyState === 1) return player ? 'ready' : 'connecting';
     return 'offline';

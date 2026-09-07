@@ -2996,6 +2996,7 @@
       selectOnlineControl(readOnlineControl());
     }
 
+    // Ohne Verbindung waere der Knopf ein Versprechen, das nichts einloest.
     onlineSeekBtn.disabled=status!=='ready';
     onlineSeekBtn.textContent=seeking?'Suche abbrechen':'Spiel suchen';
     onlineSeekBtn.classList.toggle('secondary',!!seeking);
@@ -3003,7 +3004,7 @@
     onlineLobbyHint.textContent=status==='ready'
       ? `${lobby.online} online · ${lobby.waiting} suchen · ${lobby.playing} Partien`
       : (status==='unconfigured'
-        ? 'Trage unten die Adresse deines Servers ein.'
+        ? 'Für diese Seite ist noch kein Spielserver eingetragen. Wie das geht, steht in server/README.md – oder trage die Adresse unten ein.'
         : 'Warte auf die Verbindung …');
     if(onlineUrlInput&&document.activeElement!==onlineUrlInput){
       onlineUrlInput.value=window.ChessOnline.serverUrl()||'';

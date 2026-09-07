@@ -483,3 +483,11 @@ test('a returning player is reconnected on load, a first-time visitor is not', (
   assert.match(onlineCode, /function autoConnect\(\) \{\s*if \(!hasAccount\(\) \|\| !serverUrl\(\)\) return false;/);
   assert.match(appOnline, /window\.ChessOnline\?\.autoConnect\?\.\(\);/);
 });
+
+test('a site without a server says so instead of pretending to connect', () => {
+  // "Nicht verbunden" waere irrefuehrend: da wartet nichts, da fehlt etwas.
+  // Und der Suchknopf waere ein Versprechen, das nichts einloest.
+  assert.match(onlineCode, /if \(!socket\) return serverUrl\(\) \? 'offline' : 'unconfigured';/);
+  assert.match(appOnline, /onlineSeekBtn\.disabled=status!=='ready';/);
+  assert.match(appOnline, /status==='unconfigured'/);
+});
