@@ -2544,8 +2544,9 @@
     const playing=puzzleMode.status==='playing';
     const toMove=puzzleMode.side==='white'?'Weiß':'Schwarz';
 
-    puzzleTitle.textContent=playing?`${toMove} zieht und gewinnt`:(
-      puzzleMode.status==='solved'?'Gelöst':'Lösung');
+    puzzleTitle.textContent=playing
+      ?(puzzle.mateIn?`${toMove} setzt matt`:`${toMove} zieht und gewinnt`)
+      :(puzzleMode.status==='solved'?'Gelöst':'Lösung');
     puzzleBadge.textContent=puzzle.rating;
 
     // Ein Punkt je gesuchtem Zug: gefunden, aktuell, offen.

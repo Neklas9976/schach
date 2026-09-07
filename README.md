@@ -206,6 +206,61 @@ GitHub Pages Dateien und Ordner mit führendem Unterstrich stillschweigend weg �
 für eine reine Dateiablage ist die Verarbeitung überflüssig und nur eine
 Fehlerquelle.
 
+### Ein eigener Name statt neklas9976.github.io
+
+Drei Wege, vom kostenlosen zum schönsten.
+
+**1. Kostenlos: eine GitHub-Organisation mit gutem Namen.**
+Eine Organisation anlegen (github.com/organizations/plan → *Free*), sie z. B.
+`schachplatz` nennen, das Repository dorthin verschieben (Repo → Settings →
+*Transfer ownership*) und in `schachplatz.github.io` umbenennen. Die Seite liegt
+dann unter `https://schachplatz.github.io/` – ohne Benutzernamen und ohne
+Unterordner. Kostet nichts, dauert fünf Minuten.
+
+**2. Eine echte Domain (rund 10–15 € im Jahr).**
+`.de` ist am günstigsten, `.com` etwas teurer, `.chess` gibt es nicht. Kaufen
+lässt sie sich bei jedem Registrar (INWX, Namecheap, Cloudflare Registrar –
+letzterer verkauft zum Einkaufspreis ohne Aufschlag). Eine Domain muss der
+Inhaber selbst kaufen; das lässt sich nicht delegieren.
+
+Danach zwei Schritte:
+
+*Im Repository:* eine Datei `CNAME` im Wurzelverzeichnis anlegen, die genau
+eine Zeile enthält – die Domain, ohne `https://`:
+
+```
+schachplatz.de
+```
+
+Alternativ dasselbe über Settings → Pages → *Custom domain*; GitHub legt die
+Datei dann selbst an. **Wichtig:** die Datei muss im Repository bleiben, sonst
+verliert die Seite die Domain beim nächsten Push.
+
+*Beim Registrar (DNS):* für die nackte Domain vier A-Einträge
+
+```
+185.199.108.153
+185.199.109.153
+185.199.110.153
+185.199.111.153
+```
+
+und für `www` einen CNAME-Eintrag auf `neklas9976.github.io`. Wer stattdessen
+nur `schach.meinedomain.de` will, braucht ausschließlich diesen einen
+CNAME-Eintrag und keine A-Einträge.
+
+Nach der DNS-Umstellung (Minuten bis wenige Stunden) in Settings → Pages
+**Enforce HTTPS** einschalten. Das Zertifikat stellt GitHub kostenlos aus.
+
+**3. Netlify oder Cloudflare Pages** nehmen die Domain im eigenen Dashboard
+entgegen und stellen das Zertifikat ebenfalls kostenlos aus – wer ohnehin dort
+veröffentlicht, spart sich die A-Einträge.
+
+Am Programm ändert sich in allen drei Fällen **nichts**: alle Pfade sind
+dokumentrelativ, die Seite läuft unter `/`, unter `/schach/` und unter jeder
+Domain gleich. Der Test *no runtime path starts at the domain root* hält das
+fest.
+
 ### Netlify, Cloudflare Pages, jeder andere Hoster
 
 Kein Build-Schritt, kein Ausgabeordner: Repository verbinden, Build-Befehl leer
