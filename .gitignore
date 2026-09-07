@@ -27,3 +27,7 @@ Thumbs.db
 # Spielserver: Abhaengigkeiten und die Kontendatei gehoeren nicht ins Repo.
 server/node_modules/
 server/data/
+
+# Arbeitsspuren der Werkzeuge: Protokolle und Zwischenstaende der
+# Puzzle-Erzeugung. Das Ergebnis steht in static/puzzles.json.
+tools/log/
