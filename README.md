@@ -1,10 +1,46 @@
-# Schachprogramm v3.8
+# Schachprogramm v3.9
 
 Schachprogramm mit vollständigen Regeln, Schachuhr, Computergegner, Partie-Analyse,
-Taktik-Training, PGN/FEN, Archiv und Sound. Läuft als reine statische Seite –
-Stockfish rechnet als WebAssembly im Browser, es gibt keinen Server.
+Taktik-Training, Online-Partien, PGN/FEN, Archiv und Sound. Die Seite selbst ist
+statisch – Stockfish rechnet als WebAssembly im Browser. Nur für das Spiel gegen
+andere Menschen kommt ein kleiner Server dazu.
 
 **Lizenz:** GNU GPL v3 (siehe `LICENSE`) · **Fremdinhalte:** `ATTRIBUTIONS.md`
+
+## Online spielen (v3.9)
+
+Der Knopf **🌐 Online** (oder die Taste `O`) öffnet die Lobby: Name eintragen,
+Bedenkzeit wählen, *Spiel suchen*. Der Server paart zwei Suchende mit ähnlicher
+Wertung und die Partie beginnt – auf demselben Brett wie alles andere.
+
+* **Kein Passwort.** Der Server gibt beim ersten Besuch ein Merkmal aus, das im
+  Browser bleibt. Wo keine Anmeldedaten liegen, können auch keine gestohlen
+  werden.
+* **Elo-Wertung** ab 1200, Bestenliste, Bilanz.
+* **Neu laden schadet nicht.** Die laufende Partie kommt beim Verbinden zurück;
+  der Gegner sieht so lange „Gegner weg" und gewinnt erst, wenn nach einer
+  Minute niemand zurückkommt.
+* **Keine Motorhilfe.** Bewertungsbalken, Hinweis und Analyse sind während einer
+  Online-Partie abgeschaltet – eine Stockfish-Bewertung neben dem Brett ist
+  genau das, wofür man anderswo gesperrt wird.
+* Remis anbieten, aufgeben, Uhr mit Fischer-Zuschlag.
+
+Der Server prüft **jeden Zug selbst** und misst die Zeit; ein Client, dem
+geglaubt wird, lässt sich in der Entwicklerkonsole in zehn Sekunden zum
+Schummeln überreden. Die Regeln dafür kommen aus derselben Datei wie im
+Browser – eine zweite Regelimplementierung wäre eine zweite Wahrheit.
+
+Aufsetzen, Veröffentlichen und Kosten stehen in
+[`server/README.md`](server/README.md). Kurzfassung:
+
+```bash
+npm install --prefix server
+node server/index.js
+```
+
+Danach die Adresse des veröffentlichten Servers in
+`static/online-config.js` eintragen. Ohne Eintrag bleibt der Online-Teil
+schlicht abgeschaltet; alles andere funktioniert weiter.
 
 ## Taktik-Training (v3.8)
 

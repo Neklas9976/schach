@@ -413,3 +413,73 @@ test('every time control the client may ask for really exists', () => {
   // einfach liegen laesst, blockiert beide fuer immer.
   assert.equal(findControl('unlimited'), null);
 });
+
+/* --- Was der Browser aus alldem macht ---------------------------------- */
+
+import fs from 'node:fs';
+const onlineCode = fs.readFileSync(new URL('../static/online.js', import.meta.url), 'utf8');
+const appOnline = fs.readFileSync(new URL('../static/app.js', import.meta.url), 'utf8');
+
+test('an online game switches off every engine assist', () => {
+  // Eine Stockfish-Bewertung neben dem Brett ist genau das, wofuer man
+  // anderswo gesperrt wird - gegen einen Menschen darf beides nicht gehen.
+  assert.match(appOnline, /function evalEnabled\(\)\{[\s\S]{0,420}if\(puzzleMode\|\|onlineMode\) return false;/);
+  assert.match(appOnline, /if\(onlineMode\)\{ onlineNotice\('Im Online-Spiel gibt es keinen Hinweis\.'\); return; \}/);
+  assert.match(appOnline, /if\(puzzleMode\|\|onlineMode\) return;\s*\n\s*if\(!window\.ChessAI \|\| !window\.ChessAI\.isComputerTurn/);
+});
+
+test('only the player’s own colour can be moved online', () => {
+  assert.match(appOnline, /return state\.turn===onlineMode\.colour\?onlineMode\.colour:null;/);
+});
+
+test('a move is attributed by the position, not by a flag', () => {
+  // afterMoveSettled laeuft erst nach der Animation. Jeder gesetzte Merker
+  // waere bis dahin zurueckgenommen, und der Zug des Gegners ginge an den
+  // Server zurueck, als waere er der eigene.
+  assert.match(appOnline, /const mover=state\.turn==='white'\?'black':'white';\s*if\(mover!==onlineMode\.colour\) return;/);
+});
+
+test('the server has the last word when the boards disagree', () => {
+  assert.match(appOnline, /window\.ChessOnline\.requestSync\(\);/);
+  assert.match(appOnline, /O\.on\('sync',game=>\{/);
+});
+
+test('the clock is handed over rather than painted alongside', () => {
+  // clock.js uebermalt in seiner Schleife jeden Frame alles - danebenmalen
+  // ginge nicht.
+  const clockCode = fs.readFileSync(new URL('../static/clock.js', import.meta.url), 'utf8');
+  assert.match(clockCode, /window\.ChessClock\.useExternalClock = source =>/);
+  assert.match(appOnline, /window\.ChessClock\?\.useExternalClock\?\.\(onlineClockSource\);/);
+  // Und beim Verlassen zurueckgegeben, sonst zeigt die naechste Partie die
+  // Restzeiten der alten.
+  assert.match(appOnline, /window\.ChessClock\?\.useExternalClock\?\.\(null\);/);
+});
+
+test('the connection layer knows nothing about the board', () => {
+  // Sonst waere sie nicht ohne Browser pruefbar - und die Anzeige haenge an
+  // der Netzschicht statt umgekehrt.
+  for (const forbidden of ['getElementById', 'querySelector', 'innerHTML', 'ChessEngine']) {
+    assert.equal(onlineCode.includes(forbidden), false, `online.js greift auf ${forbidden} zu`);
+  }
+});
+
+test('a reconnect backs off instead of hammering the server', () => {
+  assert.match(onlineCode, /const BACKOFF = \[/);
+  assert.match(onlineCode, /BACKOFF\[Math\.min\(attempt, BACKOFF\.length - 1\)\]/);
+  // Ein Wechsel in ein anderes Fenster darf sich nicht gegenseitig
+  // hinauswerfen.
+  assert.match(onlineCode, /if \(deliberate \|\| event\.code === 4001\) return;/);
+});
+
+test('names from other players are escaped before they are shown', () => {
+  // Sie kommen von Fremden und landen in innerHTML.
+  assert.match(appOnline, /escapeHtml\(p\.name\)/);
+});
+
+test('a returning player is reconnected on load, a first-time visitor is not', () => {
+  // Wer mitten in einer Partie neu laedt, bekommt sie sonst nicht zurueck und
+  // verliert auf Zeit, ohne es zu merken. Umgekehrt soll das blosse Aufrufen
+  // der Seite keine Verbindung aufbauen, die niemand bestellt hat.
+  assert.match(onlineCode, /function autoConnect\(\) \{\s*if \(!hasAccount\(\) \|\| !serverUrl\(\)\) return false;/);
+  assert.match(appOnline, /window\.ChessOnline\?\.autoConnect\?\.\(\);/);
+});

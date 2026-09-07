@@ -1368,3 +1368,135 @@ body.puzzle-active .help-text::before { content: 'Taktik: '; font-weight: 800; c
 
 /* Der ausgelassene weisse Zug, wenn eine Stellung mit Schwarz am Zug beginnt. */
 .move-cell.move-skipped { color: var(--ink-4); cursor: default; }
+
+/* ===================================================================== *
+ * Online spielen
+ * ===================================================================== */
+
+.online-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+    padding: 16px 17px 14px;
+    display: grid;
+    gap: 12px;
+    border-left: 3px solid var(--accent-line);
+}
+
+.online-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.online-title { font-size: 1.12rem; font-weight: 800; margin-top: 5px; }
+.online-feedback { color: var(--ink-2); font-size: .87rem; min-height: 20px; line-height: 1.45; }
+
+/* Ein Punkt statt eines Wortes: der Verbindungszustand soll auffallen, wenn er
+   schlecht ist, und sonst nicht stoeren. */
+.online-dot {
+    flex: none; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--ink-4);
+    box-shadow: 0 0 0 3px var(--layer-2);
+}
+.online-dot.is-on { background: var(--tone-best); }
+.online-dot.is-off { background: var(--tone-worst); }
+
+.online-draw {
+    display: grid; gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    font-size: .85rem;
+    font-weight: 600;
+}
+.online-draw[hidden] { display: none !important; }
+
+.online-actions { grid-template-columns: 1fr 1fr; }
+
+/* Waehrend einer Online-Partie sind die lokalen Partieknoepfe sinnlos oder
+   schaedlich: zuruecknehmen gibt es nicht, und der Hinweis waere Motorhilfe. */
+body.online-active .status-card,
+body.online-active .review-card,
+body.online-active .action-groups .action-group:first-child,
+body.online-active #hint-btn,
+body.online-active #review-btn,
+body.online-active #new-game-btn { display: none; }
+
+/* --- Das Fenster -------------------------------------------------------- */
+
+.online-modal {
+    width: min(680px, 94vw);
+    max-height: min(88vh, 900px);
+    overflow: auto;
+    border-radius: 20px;
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
+    padding: 22px;
+    display: grid;
+    gap: 18px;
+}
+
+.online-name-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.online-name-row .text-input { flex: 1 1 200px; }
+.online-name-row .action-button { flex: 0 0 auto; }
+
+.text-input {
+    font: inherit;
+    color: var(--ink);
+    background: var(--layer-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    min-width: 0;
+}
+.text-input:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+.online-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+}
+
+.online-control {
+    font: inherit;
+    display: grid;
+    gap: 2px;
+    padding: 10px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--layer-2);
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+    cursor: pointer;
+    text-align: center;
+    transition: background .15s ease, border-color .15s ease;
+}
+.online-control:hover { background: var(--layer-3); }
+.online-control strong { font-size: .95rem; color: var(--ink); }
+.online-control small { font-size: .68rem; color: var(--ink-3); font-weight: 700; letter-spacing: .04em; }
+.online-control.active { background: var(--accent-soft); border-color: var(--accent-line); }
+
+.online-board { display: grid; gap: 2px; }
+.online-board-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    font-size: .85rem;
+}
+.online-board-row:nth-child(odd) { background: var(--layer-1); }
+.online-rank { color: var(--ink-4); font-weight: 800; font-size: .75rem; }
+.online-board-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-board-rating { font-weight: 800; }
+.online-board-record { color: var(--ink-3); font-size: .75rem; font-variant-numeric: tabular-nums; }
+
+.online-advanced > summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: .85rem;
+    color: var(--ink-3);
+    list-style: none;
+}
+.online-advanced > summary::before { content: '▸ '; }
+.online-advanced[open] > summary::before { content: '▾ '; }
+.online-advanced > summary::-webkit-details-marker { display: none; }

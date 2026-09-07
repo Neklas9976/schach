@@ -264,8 +264,25 @@
     const lastText = { white: null, black: null };
     const lastLow = { white: null, black: null };
 
+    /**
+     * Wer die Uhr gerade fuehrt, wenn nicht diese Datei selbst.
+     *
+     * Online ist der Server massgeblich: er misst die Zeit, und der Browser
+     * zeigt nur an. Daneben zu malen ginge nicht - die Schleife unten
+     * uebermalt jeden Frame alles wieder. Also uebergibt die Uhr die Werte,
+     * behaelt aber das Zeichnen: Format, Warnfarbe und das Vermeiden
+     * ueberfluessiger DOM-Schreibvorgaenge gehoeren an eine Stelle.
+     */
+    let externalSource = null;
+
     function paint(color, el) {
       if (!el) return;
+
+      const external = externalSource ? externalSource(color) : null;
+      if (external) {
+        paintValues(color, el, external.ms, external.active, external.running);
+        return;
+      }
 
       if (!clock.isEnabled()) {
         if (lastText[color] !== '—') {
@@ -277,7 +294,12 @@
         return;
       }
 
-      const ms = clock.remainingFor(color);
+      paintValues(color, el, clock.remainingFor(color),
+                  clock.activeColor() === color, clock.isRunning(),
+                  clock.flagged() === color);
+    }
+
+    function paintValues(color, el, ms, isActive, running, flagged = false) {
       const text = clock.formatTime(ms);
       if (lastText[color] !== text) {
         el.textContent = text;
@@ -285,8 +307,8 @@
       }
 
       el.classList.remove('placeholder-clock');
-      el.classList.toggle('clock-active', clock.activeColor() === color && clock.isRunning());
-      el.classList.toggle('clock-flagged', clock.flagged() === color);
+      el.classList.toggle('clock-active', isActive && running);
+      el.classList.toggle('clock-flagged', flagged);
 
       const low = ms <= 20_000 && ms > 0;
       if (lastLow[color] !== low) {
@@ -294,7 +316,7 @@
         // Sounded on the transition only. A tick every second would be the
         // obvious alternative and is exactly the kind of noise people turn
         // sound off over; the colour change already carries the ongoing state.
-        if (low && lastLow[color] !== null && clock.activeColor() === color && clock.isRunning()) {
+        if (low && lastLow[color] !== null && isActive && running) {
           if (typeof window !== 'undefined') window.ChessSound?.play('lowTime');
         }
         lastLow[color] = low;
@@ -370,6 +392,22 @@
       lastLow.white = lastLow.black = null;
     };
     window.ChessClock.setHint = setHint;
+    /**
+     * Uebergibt die Anzeige an eine andere Quelle - oder holt sie zurueck.
+     *
+     * `source(color)` liefert {ms, active, running} oder null. null als Quelle
+     * gibt die Uhr wieder an die eigene Zeitmessung zurueck.
+     */
+    window.ChessClock.useExternalClock = source => {
+      externalSource = typeof source === 'function' ? source : null;
+      window.ChessClock.resetDisplayCache();
+      // Die Zeichenschleife laeuft, seit die Seite geladen ist - aber sie malt
+      // nur, was clock.js selbst weiss. Sie hier anzustossen ist trotzdem
+      // noetig: sonst bliebe die uebergebene Zeit auf dem Wert stehen, den sie
+      // im Augenblick der Uebergabe hatte, und die Uhr stuende still.
+      ensureLoop();
+      paintAll();
+    };
   } else {
     // Test / non-DOM environment.
     const target = (typeof window !== 'undefined') ? window : globalThis;

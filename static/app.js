@@ -42,6 +42,29 @@
   const puzzleHintBtn=document.getElementById('puzzle-hint');
   const puzzleSolutionBtn=document.getElementById('puzzle-solution');
 
+  // Online spielen. Wie die Puzzle-Griffe hier oben, aus demselben Grund.
+  const onlineCard=document.getElementById('online-card');
+  const onlineTitle=document.getElementById('online-title');
+  const onlineDot=document.getElementById('online-dot');
+  const onlineFeedback=document.getElementById('online-feedback');
+  const onlineDrawBox=document.getElementById('online-draw');
+  const onlineDrawText=document.getElementById('online-draw-text');
+  const onlineOfferDrawBtn=document.getElementById('online-offer-draw');
+  const onlineResignBtn=document.getElementById('online-resign');
+  const onlineLeaveBtn=document.getElementById('online-leave');
+  const onlineOverlay=document.getElementById('online-overlay');
+  const onlineConnection=document.getElementById('online-connection');
+  const onlineNameInput=document.getElementById('online-name');
+  const onlineStats=document.getElementById('online-stats');
+  const onlineControls=document.getElementById('online-controls');
+  const onlineSeekBtn=document.getElementById('online-seek');
+  const onlineLobbyHint=document.getElementById('online-lobby-hint');
+  const onlineBoard=document.getElementById('online-board');
+  const onlineUrlInput=document.getElementById('online-url');
+
+  /** Die laufende Online-Partie, oder null. */
+  let onlineMode=null;
+
   /** Der laufende Trainingszustand, oder null ausserhalb des Trainings. */
   let puzzleMode=null;
   /** Vom Anwender im Trainingsfenster gewaehltes Thema. */
@@ -159,6 +182,13 @@
    * refuse the premove or accept a move for the opponent.
    */
   function inputColor(){
+    if(onlineMode){
+      // Nur die eigene Farbe, nur am Zug, nur solange die Partie laeuft. Ein
+      // Premove waere hier moeglich, aber er muesste ueber den Server laufen -
+      // solange es das nicht gibt, waere er ein Zug ins Leere.
+      if(onlineMode.finished||moveTransaction||pendingPromotion||!isLive()) return null;
+      return state.turn===onlineMode.colour?onlineMode.colour:null;
+    }
     if(puzzleMode){
       // Kein Premove, keine Gegenfarbe, nichts waehrend das Programm zieht:
       // eine Aufgabe hat genau einen Spieler und genau eine Reihenfolge.
@@ -746,7 +776,7 @@
     viewPly=movesLog.length;arrows=[];marks=[];hintMove=null;
     gameEnded=['checkmate','stalemate','fifty-move','threefold','insufficient-material'].includes(nextStatus.type);
 
-    if(window.ChessClock && !puzzleMode){
+    if(window.ChessClock && !puzzleMode && !onlineMode){
       const mover=ChessEngine.colorOf(piece);
       if(gameEnded) window.ChessClock.stop();
       else window.ChessClock.onMoveMade(mover,state.turn);
@@ -817,7 +847,7 @@
   async function maybeRequestComputerMove(){
     // Die Gegenzuege einer Aufgabe stehen fest; eine Engine, die hier
     // dazwischenspielt, wuerde die Loesung zerstoeren.
-    if(puzzleMode) return;
+    if(puzzleMode||onlineMode) return;
     if(!window.ChessAI || !window.ChessAI.isComputerTurn(state.turn)) return;
     if(gameEnded || moveTransaction || pendingPromotion || window.ChessAI.isThinking()) return;
 
@@ -857,6 +887,7 @@
 
   function updateStatus(st,vs){
     paintPuzzleCard();
+    paintOnlineCard();
     statusCard.classList.remove('check-state','game-over');
     // While the player is looking back through the game, the status line
     // describes the position on screen, not the result of the game.
@@ -1041,6 +1072,7 @@
    * turn first, and only if there is none does the engine get asked.
    */
   function afterMoveSettled(){
+    if(onlineMode){ onlineAfterMove(); return; }
     if(puzzleMode){
       // Ein vom Programm gespielter Zug kann eine Fortsetzung angehaengt
       // haben - die Loesungsvorfuehrung laeuft so Schritt fuer Schritt ab.
@@ -1252,7 +1284,9 @@
   function evalEnabled(){
     // Waehrend einer Aufgabe waere der Balken die Loesung: er zeigt an, dass
     // hier etwas zu holen ist, und nach dem richtigen Zug schlaegt er aus.
-    if(puzzleMode) return false;
+    // Gegen einen Menschen ist er schlicht Betrug - eine Stockfish-Bewertung
+    // neben dem Brett ist genau das, wofuer man anderswo gesperrt wird.
+    if(puzzleMode||onlineMode) return false;
     try { return JSON.parse(localStorage.getItem('chess-eval-bar')||'false')===true; }
     catch { return false; }
   }
@@ -1316,6 +1350,12 @@
 
   function newGame(){
     if(moveTransaction)return;
+    if(onlineMode){
+      onlineMode=null;
+      document.body.classList.remove('online-active');
+      if(onlineCard) onlineCard.hidden=true;
+      window.ChessClock?.useExternalClock?.(null);
+    }
     if(puzzleMode){
       puzzleMode=null;
       document.body.classList.remove('puzzle-active');
@@ -1559,7 +1599,7 @@
 
   /** Writes the finished game to the archive, replacing its own earlier entry. */
   function archiveFinishedGame(outcome,reason){
-    if(puzzleMode) return null;
+    if(puzzleMode||onlineMode) return null;
     if(!window.ChessArchive||!window.ChessNotation||!movesLog.length) return null;
     const computerGame=!!(window.ChessAI&&window.ChessAI.isComputerGame());
     const settings=window.ChessAI?window.ChessAI.getSettings():null;
@@ -1619,8 +1659,10 @@
   function showGameOver(st){
     if(!gameOverOverlay) return;
     // Ein Matt ist im Training die Loesung, nicht das Ende einer Partie - und
-    // eine Aufgabe gehoert auch nicht ins Partiearchiv.
-    if(puzzleMode) return;
+    // eine Aufgabe gehoert auch nicht ins Partiearchiv. Online meldet der
+    // Server das Ergebnis, samt Grund und Wertung; das Brett darf nicht
+    // vorgreifen, denn es kennt weder Uhr noch Aufgabe des Gegners.
+    if(puzzleMode||onlineMode) return;
     const outcome=describeOutcome(st);
     if(!outcome) return;
 
@@ -1963,6 +2005,9 @@
 
   async function showHint(){
     if(puzzleMode){ puzzleHint(); return; }
+    // Aus demselben Grund wie der Bewertungsbalken: den besten Zug ansagen zu
+    // lassen, waehrend gegenueber ein Mensch sitzt, ist kein Hinweis.
+    if(onlineMode){ onlineNotice('Im Online-Spiel gibt es keinen Hinweis.'); return; }
     if(!isLive()||gameEnded){ return; }
     const target=shownState();
     try{
@@ -2256,7 +2301,8 @@
       case 's': case 'S': openPgn(); break;
       case 'p': case 'P': openArchive(); break;
       case 't': case 'T': openPuzzleDialog(); break;
-      case 'Escape': closePgn(); closeArchive(); closeGameOver(); closePromotion(); closePuzzleDialog(); break;
+      case 'o': case 'O': openOnlineDialog(); break;
+      case 'Escape': closePgn(); closeArchive(); closeGameOver(); closePromotion(); closePuzzleDialog(); closeOnlineDialog(); break;
       default: return;
     }
     e.preventDefault();
@@ -2663,10 +2709,481 @@
   document.getElementById('puzzle-exit')?.addEventListener('click',exitPuzzle);
 
   /* ===================================================================== *
+   * Online spielen
+   * ===================================================================== *
+   *
+   * Wie beim Training laeuft alles auf demselben Brett. Der Unterschied: der
+   * Server hat recht. Er prueft jeden Zug und misst die Zeit; der Browser
+   * zeigt an und schickt hin.
+   *
+   * Der eigene Zug wird trotzdem sofort gespielt, ohne auf den Server zu
+   * warten. Beide rechnen mit derselben Regel-Engine, also stimmen sie
+   * ueberein - und ein Brett, das erst nach der Netzlaufzeit reagiert, fuehlt
+   * sich kaputt an. Widerspricht der Server doch, schickt er die gueltige
+   * Stellung, und die gilt.
+   */
+
+  /** Wie lange eine kurze Meldung den Dauerzustand verdeckt. */
+  const ONLINE_NOTICE_MS = 4_000;
+
+  const RESULT_REASONS = {
+    checkmate: 'Schachmatt',
+    resign: 'Aufgegeben',
+    timeout: 'Zeit abgelaufen',
+    'timeout-insufficient': 'Zeit abgelaufen – Remis mangels Material',
+    abandoned: 'Verbindung verloren',
+    agreement: 'Remis vereinbart',
+    stalemate: 'Patt',
+    'fifty-move': '50-Züge-Regel',
+    threefold: 'Dreifache Stellungswiederholung',
+    'insufficient-material': 'Unzureichendes Material'
+  };
+
+  function onlineReady(){ return !!window.ChessOnline; }
+  function onlineActive(){ return !!onlineMode; }
+
+  /* --- Betreten und Verlassen -------------------------------------------- */
+
+  function enterOnlineGame(game, resumed){
+    const colour=window.ChessOnline.myColour();
+    if(!colour) return;
+    const carried=onlineMode?onlineMode.savedGame
+      :((movesLog.length&&!gameEnded)?captureGame():null);
+
+    onlineMode={
+      savedGame:carried,
+      gameId:game.id,
+      colour,
+      // Ein selbst gespielter Zug kommt vom Server zurueck. Er ist dann schon
+      // auf dem Brett und darf nicht ein zweites Mal gespielt werden.
+      pending:null,
+      clockAt:Date.now(),
+      drawOfferFrom:game.drawOfferFrom||null,
+      opponentGone:false,
+      finished:game.status==='finished'
+    };
+    document.body.classList.add('online-active');
+    if(puzzleMode) exitPuzzle();
+
+    setFlipped(colour==='black');
+    window.ChessClock?.useExternalClock?.(onlineClockSource);
+    applyServerGame(game);
+    window.ChessSound?.play(resumed?'notify':'gameStart');
+    paintOnlineCard();
+  }
+
+  function leaveOnline(){
+    if(!onlineMode) return;
+    const saved=onlineMode.savedGame;
+    const running=!onlineMode.finished;
+    onlineMode=null;
+    document.body.classList.remove('online-active');
+    if(onlineCard) onlineCard.hidden=true;
+    window.ChessClock?.useExternalClock?.(null);
+    // Eine laufende Partie einfach zu verlassen waere ein Aufgeben ohne es zu
+    // sagen; der Server wertet sie nach kurzer Wartezeit ohnehin so.
+    if(running) window.ChessOnline?.resign?.();
+    if(saved) restoreGame(saved);
+    else newGame();
+  }
+
+  /**
+   * Setzt die Stellung des Servers aufs Brett.
+   *
+   * Wird beim Betreten gebraucht, beim Wiederverbinden und immer dann, wenn
+   * der Server widerspricht. Die Zuege werden nachgespielt statt die FEN
+   * gesetzt: so stehen Zugliste, Eroeffnungsname und die Rueckschau richtig da.
+   */
+  function applyServerGame(game){
+    const plies=[];
+    let cursor=ChessEngine.fromFen(game.startingFen);
+    for(const entry of game.moves){
+      const move=resolveUci(cursor,entry.uci);
+      if(!move) break;
+      plies.push({move,san:entry.san});
+      cursor=ChessEngine.applyMove(cursor,move);
+    }
+    loadGame(game.startingFen,plies);
+    onlineMode.finished=game.status==='finished';
+    onlineMode.drawOfferFrom=game.drawOfferFrom||null;
+    setOnlinePlayers(game);
+    paintOnlineCard();
+  }
+
+  /** Namen und Wertungen in die Leisten ueber und unter dem Brett. */
+  function setOnlinePlayers(game){
+    if(!onlineMode) return;
+    const mine=onlineMode.colour;
+    const me=mine==='white'?game.white:game.black;
+    const other=mine==='white'?game.black:game.white;
+    bottomName.textContent=`${me.name} (${me.rating})`;
+    topName.textContent=`${other.name} (${other.rating})`;
+  }
+
+  /* --- Uhr --------------------------------------------------------------- */
+
+  /**
+   * Was die Uhr anzeigen soll.
+   *
+   * Der Server schickt die Restzeiten mit jedem Zug. Zwischen zwei Zuegen
+   * laeuft die Anzeige hier weiter - sonst stuende sie still und spraenge dann.
+   * Massgeblich bleibt trotzdem der Server: seine naechste Zahl ueberschreibt.
+   */
+  function onlineClockSource(color){
+    if(!onlineMode) return null;
+    const game=window.ChessOnline.game();
+    if(!game||!game.clock) return null;
+    const clock=game.clock;
+    const base=clock[color];
+    if(base==null) return null;
+    const running=clock.running&&!onlineMode.finished;
+    const ticking=running&&clock.turn===color;
+    const since=ticking?Date.now()-(onlineMode.clockAt||Date.now()):0;
+    return {ms:Math.max(0,base-since),active:clock.turn===color,running};
+  }
+
+  function markClock(){
+    if(onlineMode) onlineMode.clockAt=Date.now();
+  }
+
+  /* --- Zuege ------------------------------------------------------------- */
+
+  /** Nach einem eigenen Zug: hinschicken. */
+  function onlineAfterMove(){
+    if(!onlineMode||onlineMode.finished) return;
+    const played=lastCommittedMove;
+    if(!played) return;
+    // Wer gerade gezogen hat, ist die Seite, die jetzt *nicht* mehr am Zug
+    // ist. Ein gesetzter Merker waere hier falsch: afterMoveSettled laeuft
+    // erst nach der Animation, und bis dahin ist jeder Merker laengst wieder
+    // zurueckgenommen - der Zug des Gegners ginge an den Server zurueck.
+    const mover=state.turn==='white'?'black':'white';
+    if(mover!==onlineMode.colour) return;
+    onlineMode.pending=moveToUci(played);
+    window.ChessOnline.move(onlineMode.pending);
+  }
+
+  /** Ein Zug vom Server. */
+  function onServerMove(data){
+    if(!onlineMode||data.gameId!==onlineMode.gameId) return;
+    markClock();
+    if(onlineMode.pending===data.uci){
+      // Der eigene Zug, bestaetigt. Er steht schon auf dem Brett.
+      onlineMode.pending=null;
+      paintOnlineCard();
+      return;
+    }
+    if(moveTransaction){
+      // Mitten in einer Animation. Gleich noch einmal versuchen, statt den
+      // Zug zu verlieren.
+      window.setTimeout(()=>onServerMove(data),120);
+      return;
+    }
+    const move=resolveUci(state,data.uci);
+    if(!move){
+      // Auseinandergelaufen - der Server weiss es besser.
+      window.ChessOnline.requestSync();
+      return;
+    }
+    commitMove(move);
+    paintOnlineCard();
+  }
+
+  function resolveUci(fromState,uci){
+    const from=window.ChessAI.parseUciSquare(uci.slice(0,2));
+    const to=window.ChessAI.parseUciSquare(uci.slice(2,4));
+    const candidates=ChessEngine.movesBetween(fromState,from,to);
+    if(!candidates.length) return null;
+    const promotion=uci.length>4?uci[4]:null;
+    if(promotion) return candidates.find(m=>m.promotion&&String(m.promotion).toLowerCase()===promotion)||null;
+    return candidates.find(m=>!m.promotion)||null;
+  }
+
+  /* --- Anzeige ----------------------------------------------------------- */
+
+  function setOnlineFeedback(text){
+    if(onlineFeedback) onlineFeedback.textContent=text;
+  }
+
+  /**
+   * Eine Meldung, die einen Moment stehen bleibt.
+   *
+   * paintOnlineCard laeuft nach jedem Zug und nach jeder Serverantwort und
+   * ueberschreibt den Text mit dem Dauerzustand ("Du bist am Zug"). Ein
+   * "Remis abgelehnt" waere sonst weg, bevor man es gelesen hat.
+   */
+  function onlineNotice(text){
+    if(!onlineMode) return;
+    onlineMode.notice=text;
+    onlineMode.noticeAt=Date.now();
+    setOnlineFeedback(text);
+    window.setTimeout(()=>{ if(onlineMode&&onlineMode.notice===text) paintOnlineCard(); },ONLINE_NOTICE_MS+100);
+  }
+
+  function paintOnlineCard(){
+    if(!onlineCard) return;
+    onlineCard.hidden=!onlineMode;
+    if(!onlineMode) return;
+    const game=window.ChessOnline.game();
+    const other=window.ChessOnline.opponent();
+    const connected=window.ChessOnline.status()==='ready';
+
+    onlineDot.className=`online-dot ${connected?'is-on':'is-off'}`;
+    onlineDot.title=connected?'Verbunden':'Keine Verbindung';
+
+    if(onlineMode.finished&&game&&game.result){
+      const r=game.result;
+      const mine=onlineMode.colour;
+      onlineTitle.textContent=r.winner==null?'Remis'
+        :(r.winner===mine?'Gewonnen':'Verloren');
+      setOnlineFeedback(RESULT_REASONS[r.reason]||'Partie beendet.');
+    } else if(!connected){
+      onlineTitle.textContent='Verbindung weg';
+      setOnlineFeedback('Es wird neu verbunden – deine Uhr läuft weiter.');
+    } else if(onlineMode.opponentGone){
+      onlineTitle.textContent='Gegner weg';
+      setOnlineFeedback(`${other?other.name:'Der Gegner'} ist offline. Kommt niemand zurück, gewinnst du.`);
+    } else if(onlineMode.notice&&Date.now()-onlineMode.noticeAt<ONLINE_NOTICE_MS){
+      onlineTitle.textContent=other?`Gegen ${other.name}`:'Partie läuft';
+      setOnlineFeedback(onlineMode.notice);
+    } else {
+      onlineMode.notice=null;
+      onlineTitle.textContent=other?`Gegen ${other.name}`:'Partie läuft';
+      setOnlineFeedback(state.turn===onlineMode.colour?'Du bist am Zug.':'Der Gegner überlegt …');
+    }
+
+    const offered=onlineMode.drawOfferFrom;
+    const fromOther=offered&&offered!==onlineMode.colour;
+    onlineDrawBox.hidden=!fromOther||onlineMode.finished;
+    if(fromOther) onlineDrawText.textContent=`${other?other.name:'Der Gegner'} bietet Remis an.`;
+
+    const over=onlineMode.finished;
+    onlineOfferDrawBtn.disabled=over||offered===onlineMode.colour;
+    onlineResignBtn.disabled=over;
+    onlineLeaveBtn.textContent=over?'Zurück':'Online verlassen';
+  }
+
+  /* --- Das Fenster ------------------------------------------------------- */
+
+  function paintOnlineDialog(){
+    if(!onlineOverlay||onlineOverlay.hidden) return;
+    const status=window.ChessOnline.status();
+    const player=window.ChessOnline.player();
+    const lobby=window.ChessOnline.lobby();
+    const seeking=window.ChessOnline.seeking();
+
+    const words={offline:'Nicht verbunden',connecting:'Verbinde …',ready:'Verbunden',
+      reconnecting:'Verbindung unterbrochen – neuer Versuch …',unconfigured:'Kein Server eingetragen'};
+    onlineConnection.textContent=words[status]||status;
+
+    if(player){
+      const cells=[['Wertung',player.rating],['Partien',player.games],
+        ['Siege',player.wins],['Remis',player.draws],['Niederlagen',player.losses]];
+      onlineStats.innerHTML=cells.map(([label,value])=>
+        `<div class="stat-cell"><div class="stat-value">${escapeHtml(String(value))}</div>`+
+        `<div class="stat-label">${escapeHtml(label)}</div></div>`).join('');
+      if(onlineNameInput&&document.activeElement!==onlineNameInput) onlineNameInput.value=player.name;
+    } else {
+      onlineStats.innerHTML='';
+    }
+
+    const controls=window.ChessOnline.controls();
+    if(controls.length&&onlineControls.dataset.filled!=='1'){
+      onlineControls.dataset.filled='1';
+      onlineControls.innerHTML=controls.map(c=>
+        `<button type="button" class="online-control" data-control="${escapeHtml(c.id)}">`+
+        `<strong>${escapeHtml(c.label)}</strong><small>${escapeHtml(c.category)}</small></button>`).join('');
+      selectOnlineControl(readOnlineControl());
+    }
+
+    onlineSeekBtn.disabled=status!=='ready';
+    onlineSeekBtn.textContent=seeking?'Suche abbrechen':'Spiel suchen';
+    onlineSeekBtn.classList.toggle('secondary',!!seeking);
+    onlineSeekBtn.classList.toggle('primary',!seeking);
+    onlineLobbyHint.textContent=status==='ready'
+      ? `${lobby.online} online · ${lobby.waiting} suchen · ${lobby.playing} Partien`
+      : (status==='unconfigured'
+        ? 'Trage unten die Adresse deines Servers ein.'
+        : 'Warte auf die Verbindung …');
+    if(onlineUrlInput&&document.activeElement!==onlineUrlInput){
+      onlineUrlInput.value=window.ChessOnline.serverUrl()||'';
+    }
+  }
+
+  function readOnlineControl(){
+    try { return localStorage.getItem('chess-online-control')||'5+0'; }
+    catch { return '5+0'; }
+  }
+
+  function selectOnlineControl(id){
+    try { localStorage.setItem('chess-online-control',id); } catch { /* egal */ }
+    for(const button of onlineControls.querySelectorAll('.online-control')){
+      button.classList.toggle('active',button.dataset.control===id);
+    }
+  }
+
+  function openOnlineDialog(){
+    if(!onlineReady()||!onlineOverlay) return;
+    onlineOverlay.hidden=false;
+    if(!window.ChessOnline.isConnected()) window.ChessOnline.connect();
+    else window.ChessOnline.requestLeaderboard();
+    paintOnlineDialog();
+  }
+
+  function closeOnlineDialog(){ if(onlineOverlay) onlineOverlay.hidden=true; }
+
+  function paintLeaderboard(players){
+    if(!onlineBoard) return;
+    if(!players||!players.length){
+      onlineBoard.innerHTML='<div class="empty-moves">Noch hat niemand gespielt.</div>';
+      return;
+    }
+    onlineBoard.innerHTML=players.map((p,index)=>
+      `<div class="online-board-row"><span class="online-rank">${index+1}</span>`+
+      `<span class="online-board-name">${escapeHtml(p.name)}</span>`+
+      `<span class="online-board-rating">${escapeHtml(String(p.rating))}</span>`+
+      `<span class="online-board-record">${p.wins}/${p.draws}/${p.losses}</span></div>`).join('');
+  }
+
+  /* --- Verdrahtung ------------------------------------------------------- */
+
+  if(onlineReady()){
+    const O=window.ChessOnline;
+
+    O.on('status',()=>{ paintOnlineDialog(); paintOnlineCard(); });
+    O.on('lobby',()=>paintOnlineDialog());
+    O.on('welcome',()=>{ paintOnlineDialog(); O.requestLeaderboard(); });
+    O.on('player',()=>paintOnlineDialog());
+    O.on('leaderboard',paintLeaderboard);
+    O.on('seeking',()=>{ paintOnlineDialog(); });
+    O.on('seekCancelled',()=>paintOnlineDialog());
+
+    O.on('gameStart',({game,resumed})=>{
+      closeOnlineDialog();
+      markClock();
+      enterOnlineGame(game,resumed);
+    });
+
+    O.on('move',onServerMove);
+
+    O.on('sync',game=>{
+      if(!onlineMode||game.id!==onlineMode.gameId) return;
+      markClock();
+      onlineMode.pending=null;
+      applyServerGame(game);
+    });
+
+    O.on('gameOver',data=>{
+      if(!onlineMode||data.gameId!==onlineMode.gameId) return;
+      onlineMode.finished=true;
+      onlineMode.drawOfferFrom=null;
+      markClock();
+      const mine=onlineMode.colour;
+      const winner=data.result?data.result.winner:null;
+      const outcome=winner==null?'draw':(winner===mine?'win':'loss');
+      window.ChessSound?.play(outcome==='win'?'gameEndWin':outcome==='loss'?'gameEndLoss':'gameEndDraw');
+      showOnlineResult(data,outcome);
+      paintOnlineCard();
+    });
+
+    O.on('drawOffered',data=>{
+      if(!onlineMode||data.gameId!==onlineMode.gameId) return;
+      onlineMode.drawOfferFrom=data.from;
+      if(data.from!==onlineMode.colour) window.ChessSound?.play('notify');
+      paintOnlineCard();
+    });
+
+    O.on('drawDeclined',()=>{
+      if(!onlineMode) return;
+      onlineMode.drawOfferFrom=null;
+      paintOnlineCard();
+      onlineNotice('Remis abgelehnt.');
+    });
+
+    O.on('opponentGone',data=>{
+      if(!onlineMode||data.gameId!==onlineMode.gameId) return;
+      onlineMode.opponentGone=true;
+      paintOnlineCard();
+    });
+
+    O.on('opponentBack',()=>{
+      if(!onlineMode) return;
+      onlineMode.opponentGone=false;
+      paintOnlineCard();
+    });
+
+    O.on('serverError',data=>{
+      if(onlineMode) onlineNotice(data.message);
+      else if(onlineOverlay&&!onlineOverlay.hidden) onlineLobbyHint.textContent=data.message;
+    });
+
+    O.on('replaced',data=>{
+      setOnlineFeedback(data.message);
+      if(onlineOverlay) onlineLobbyHint.textContent=data.message;
+    });
+  }
+
+  function showOnlineResult(data,outcome){
+    if(!gameOverOverlay) return;
+    const titles={win:'Du gewinnst',loss:'Du verlierst',draw:'Remis'};
+    const icons={win:'🏆',loss:'😔',draw:'🤝'};
+    document.getElementById('gameover-title').textContent=titles[outcome];
+    document.getElementById('gameover-reason').textContent=
+      RESULT_REASONS[data.result?data.result.reason:'']||'Die Partie ist beendet.';
+    document.getElementById('gameover-icon').textContent=icons[outcome];
+    const ratings=data.ratings?data.ratings[onlineMode.colour]:null;
+    document.getElementById('gameover-score').textContent=ratings
+      ? `Wertung ${ratings.before} → ${ratings.after}`
+      : '';
+    gameOverOverlay.hidden=false;
+  }
+
+  document.getElementById('online-btn')?.addEventListener('click',openOnlineDialog);
+  document.getElementById('online-modal-close')?.addEventListener('click',closeOnlineDialog);
+  onlineOverlay?.addEventListener('click',e=>{ if(e.target===onlineOverlay) closeOnlineDialog(); });
+
+  onlineControls?.addEventListener('click',e=>{
+    const button=e.target.closest('.online-control');
+    if(button) selectOnlineControl(button.dataset.control);
+  });
+
+  onlineSeekBtn?.addEventListener('click',()=>{
+    if(window.ChessOnline.seeking()) window.ChessOnline.cancelSeek();
+    else window.ChessOnline.seek(readOnlineControl());
+    paintOnlineDialog();
+  });
+
+  document.getElementById('online-name-save')?.addEventListener('click',()=>{
+    window.ChessOnline.setPlayerName(onlineNameInput.value);
+  });
+  onlineNameInput?.addEventListener('keydown',e=>{
+    if(e.key==='Enter') window.ChessOnline.setPlayerName(onlineNameInput.value);
+  });
+
+  document.getElementById('online-url-save')?.addEventListener('click',()=>{
+    window.ChessOnline.setServerUrl(onlineUrlInput.value);
+    window.ChessOnline.disconnect();
+    window.ChessOnline.connect();
+    paintOnlineDialog();
+  });
+
+  onlineResignBtn?.addEventListener('click',()=>{
+    if(!onlineMode||onlineMode.finished) return;
+    if(window.confirm('Partie wirklich aufgeben?')) window.ChessOnline.resign();
+  });
+  onlineOfferDrawBtn?.addEventListener('click',()=>window.ChessOnline.offerDraw());
+  document.getElementById('online-draw-yes')?.addEventListener('click',()=>window.ChessOnline.answerDraw(true));
+  document.getElementById('online-draw-no')?.addEventListener('click',()=>window.ChessOnline.answerDraw(false));
+  onlineLeaveBtn?.addEventListener('click',leaveOnline);
+
+  /* ===================================================================== *
    * Start
    * ===================================================================== */
 
   window.renderChessBoard = render;
   buildLabels();resetRepetition();buildBoardOnce();applyOrientation();render();
   paintEval();
+  // Wer schon online gespielt hat, wird beim Laden wieder verbunden: eine
+  // laufende Partie soll ein Neuladen ueberstehen.
+  window.ChessOnline?.autoConnect?.();
 })();

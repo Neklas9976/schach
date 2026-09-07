@@ -258,20 +258,20 @@ test('statistics are derived from the catalogue, never counted up separately', (
 test('a puzzle silences everything that would give the answer away', () => {
   // The evaluation bar is the solution in one number: it jumps the moment the
   // right move lands. The engine must not play either - the replies are fixed.
-  assert.match(appCode, /function evalEnabled\(\)\{[\s\S]{0,240}if\(puzzleMode\) return false;/);
-  assert.match(appCode, /async function maybeRequestComputerMove\(\)\{[\s\S]{0,200}if\(puzzleMode\) return;/);
+  assert.match(appCode, /function evalEnabled\(\)\{[\s\S]{0,420}if\(puzzleMode\|\|onlineMode\) return false;/);
+  assert.match(appCode, /async function maybeRequestComputerMove\(\)\{[\s\S]{0,260}if\(puzzleMode\|\|onlineMode\) return;/);
 });
 
 test('a puzzle is not a game: no clock, no result dialog, no archive entry', () => {
-  assert.match(appCode, /if\(window\.ChessClock && !puzzleMode\)\{/);
-  assert.match(appCode, /function showGameOver\(st\)\{[\s\S]{0,260}if\(puzzleMode\) return;/);
-  assert.match(appCode, /function archiveFinishedGame\(outcome,reason\)\{\s*if\(puzzleMode\) return null;/);
+  assert.match(appCode, /if\(window\.ChessClock && !puzzleMode && !onlineMode\)\{/);
+  assert.match(appCode, /function showGameOver\(st\)\{[\s\S]{0,420}if\(puzzleMode\|\|onlineMode\) return;/);
+  assert.match(appCode, /function archiveFinishedGame\(outcome,reason\)\{\s*if\(puzzleMode\|\|onlineMode\) return null;/);
 });
 
 test('during a puzzle only the solving side may be moved', () => {
   // Both input paths go through inputColor, so the restriction belongs there
   // and nowhere else.
-  assert.match(appCode, /function inputColor\(\)\{\s*if\(puzzleMode\)\{/);
+  assert.match(appCode, /function inputColor\(\)\{[\s\S]{0,600}if\(puzzleMode\)\{/);
   assert.match(appCode, /return state\.turn===puzzleMode\.side\?puzzleMode\.side:null;/);
 });
 

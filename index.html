@@ -59,6 +59,29 @@
 
                     <div class="opening-name" id="opening-name" hidden></div>
 
+                    <div class="online-card" id="online-card" hidden>
+                        <div class="online-head">
+                            <div>
+                                <div class="status-kicker">ONLINE</div>
+                                <div class="online-title" id="online-title">Partie läuft</div>
+                            </div>
+                            <div class="online-dot" id="online-dot" title="Verbindung"></div>
+                        </div>
+                        <div class="online-feedback" id="online-feedback" aria-live="polite"></div>
+                        <div class="online-draw" id="online-draw" hidden>
+                            <span id="online-draw-text">Remis angeboten.</span>
+                            <div class="action-row">
+                                <button class="action-button secondary" id="online-draw-yes" type="button">Annehmen</button>
+                                <button class="action-button secondary" id="online-draw-no" type="button">Ablehnen</button>
+                            </div>
+                        </div>
+                        <div class="action-row online-actions">
+                            <button class="action-button secondary" id="online-offer-draw" type="button">½ Remis</button>
+                            <button class="action-button secondary" id="online-resign" type="button">🏳 Aufgeben</button>
+                        </div>
+                        <button class="action-button secondary wide" id="online-leave" type="button">Online verlassen</button>
+                    </div>
+
                     <div class="puzzle-card" id="puzzle-card" hidden>
                         <div class="puzzle-head">
                             <div>
@@ -118,6 +141,7 @@
                                 <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
                                 <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
                                 <button class="action-button secondary" id="puzzle-btn" type="button" title="Taktik-Training (T)">🧩 Puzzle</button>
+                                <button class="action-button secondary" id="online-btn" type="button" title="Online spielen (O)">🌐 Online</button>
                                 <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN &amp; FEN</button>
                                 <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
                             </div>
@@ -191,6 +215,60 @@
                 <span id="archive-count"></span>
                 <button class="action-button secondary" id="archive-clear" type="button">Alle löschen</button>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="online-overlay" hidden>
+        <div class="online-modal" role="dialog" aria-modal="true" aria-labelledby="online-modal-title">
+            <div class="settings-header">
+                <div>
+                    <div class="status-kicker">ONLINE</div>
+                    <h2 id="online-modal-title">Gegen andere spielen</h2>
+                    <div class="appearance-current" id="online-connection">Nicht verbunden</div>
+                </div>
+                <button class="icon-button" id="online-modal-close" type="button" aria-label="Schließen">×</button>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Dein Name</h3>
+                    <p>So sehen dich die anderen. Kein Passwort – dein Konto liegt als Merkmal in diesem Browser.</p>
+                </div>
+                <div class="online-name-row">
+                    <input id="online-name" class="text-input" type="text" maxlength="20" placeholder="z. B. Niklas" autocomplete="off" spellcheck="false">
+                    <button class="action-button secondary" id="online-name-save" type="button">Übernehmen</button>
+                </div>
+                <div class="stat-grid" id="online-stats"></div>
+            </div>
+
+            <div class="settings-section" id="online-play-section">
+                <div class="settings-block-heading">
+                    <h3>Bedenkzeit</h3>
+                    <p>Wähle eine Zeit – der Server sucht jemanden mit ähnlicher Wertung.</p>
+                </div>
+                <div class="online-controls" id="online-controls"></div>
+                <div class="action-row">
+                    <button class="action-button primary wide" id="online-seek" type="button">Spiel suchen</button>
+                </div>
+                <div class="settings-hint" id="online-lobby-hint"></div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Bestenliste</h3>
+                    <p>Alle, die schon eine Partie gespielt haben.</p>
+                </div>
+                <div class="online-board" id="online-board"></div>
+            </div>
+
+            <details class="settings-section online-advanced">
+                <summary>Serveradresse</summary>
+                <p class="settings-hint">Leer lassen, wenn der Server in <code>static/online-config.js</code> eingetragen ist. Muss mit <code>wss://</code> beginnen.</p>
+                <div class="online-name-row">
+                    <input id="online-url" class="text-input" type="text" placeholder="wss://mein-schachserver.example" autocomplete="off" spellcheck="false">
+                    <button class="action-button secondary" id="online-url-save" type="button">Verbinden</button>
+                </div>
+            </details>
         </div>
     </div>
 
@@ -471,6 +549,8 @@
     <script src="static/clock.js"></script>
     <script src="static/ai.js"></script>
     <script src="static/puzzles.js"></script>
+    <script src="static/online-config.js"></script>
+    <script src="static/online.js"></script>
     <script src="static/app.js"></script>
 </body>
 </html>
