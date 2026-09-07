@@ -533,16 +533,10 @@
   }
   function closePromotion(){promoOverlay.hidden=true;pendingPromotion=null;}
 
-  function animateMove(move, piece, interaction, done){
-    const settings=getInteractionSettings();
-    if(!settings.pieceAnimationEnabled){done();return;}
-
-    const from=boardSquareCenter(move.from[0],move.from[1]);
-    const to=boardSquareCenter(move.to[0],move.to[1]);
-    if(!from || !to){done();return;}
-
+  /** One floating copy of a piece, positioned over the board. */
+  function makeAnimator(piece, size, kind){
     const animator=document.createElement('div');
-    animator.className=`move-animator ${settings.pieceAnimation}`;
+    animator.className=`move-animator ${kind}`;
     const img=document.createElement('img');
     img.src=assetUrl(piece); img.alt='';
     img.addEventListener('error',()=>{
@@ -550,75 +544,131 @@
       if(img.src!==new URL(fallback,location.href).href) img.src=fallback;
     },{once:true});
     animator.appendChild(img);
-
-    const factor=piece.toLowerCase()==='p'?0.864:0.88;
-    const size=Math.min(from.width,to.width)*factor;
     animator.style.width=`${size}px`;
     animator.style.height=`${size}px`;
     animator.style.left='0px';
     animator.style.top='0px';
-
-    const startPoint=(interaction?.dragged && interaction.dropPoint)
-      ? interaction.dropPoint
-      : {x:from.x,y:from.y};
-    const startTransform=`translate3d(${startPoint.x-size/2}px,${startPoint.y-size/2}px,0)`;
-    const endTransform=`translate3d(${to.x-size/2}px,${to.y-size/2}px,0)`;
-    animator.style.transform=startTransform;
     document.body.appendChild(animator);
+    return animator;
+  }
+
+  function pieceScale(piece){ return piece.toLowerCase()==='p'?0.864:0.88; }
+
+  /**
+   * Plays the move.
+   *
+   * A move can involve more than one piece. Castling moves two, and the board
+   * used to animate only the king - the rook simply appeared at its
+   * destination the moment the final position was painted, which is what made
+   * castling look broken. A capture removes a third piece, which likewise used
+   * to vanish between two frames.
+   *
+   * So this animates a list: everything that travels, plus everything that
+   * leaves the board. `done` runs once, after the last of them.
+   */
+  function animateMove(move, piece, interaction, done){
+    const settings=getInteractionSettings();
+    if(!settings.pieceAnimationEnabled){done();return;}
 
     const base=settings.animation || {duration:280,easing:'cubic-bezier(0.4,0,0.2,1)'};
-    const distance=Math.hypot(to.x-startPoint.x,to.y-startPoint.y);
-    let duration=base.duration;
-    if(settings.pieceAnimation==='dynamic') duration=Math.round(Math.max(120,Math.min(420, distance*1.8)));
-    if(distance<2) duration=Math.min(duration,90);
 
-    let keyframes;
-    if(settings.pieceAnimation==='arcade') {
-      keyframes=[
-        {transform:startTransform},
-        {transform:`translate3d(${startPoint.x-size/2 + (to.x-startPoint.x)*.58}px,${startPoint.y-size/2 + (to.y-startPoint.y)*.58}px,0) scale(1.035)`},
-        {transform:endTransform}
-      ];
-    } else if(settings.pieceAnimation==='dynamic') {
-      keyframes=[
-        {transform:startTransform},
-        {transform:`translate3d(${startPoint.x-size/2 + (to.x-startPoint.x)*.72}px,${startPoint.y-size/2 + (to.y-startPoint.y)*.72}px,0) scale(1.025)`},
-        {transform:endTransform}
-      ];
-    } else {
-      keyframes=[{transform:startTransform},{transform:endTransform}];
+    // The rook follows a beat after the king. Simultaneous reads as a glitch
+    // because the two cross paths; the small stagger makes it legible as one
+    // deliberate manoeuvre.
+    const travellers=[{piece,from:move.from,to:move.to,delay:0,dragged:true}];
+    if(move.isCastle && move.rookFrom && move.rookTo){
+      const rook=ChessEngine.colorOf(piece)==='white'?'R':'r';
+      travellers.push({piece:rook,from:move.rookFrom,to:move.rookTo,delay:60,dragged:false});
     }
+
+    const animators=[];
+    const animations=[];
+    let longest=0;
+
+    for(const leg of travellers){
+      const from=boardSquareCenter(leg.from[0],leg.from[1]);
+      const to=boardSquareCenter(leg.to[0],leg.to[1]);
+      if(!from||!to) continue;
+
+      const size=Math.min(from.width,to.width)*pieceScale(leg.piece);
+      // A drag already carried the piece to where the pointer let go; starting
+      // from the square centre instead would snap it backwards first.
+      const startPoint=(leg.dragged && interaction?.dragged && interaction.dropPoint)
+        ? interaction.dropPoint : {x:from.x,y:from.y};
+
+      const startTransform=`translate3d(${startPoint.x-size/2}px,${startPoint.y-size/2}px,0)`;
+      const endTransform=`translate3d(${to.x-size/2}px,${to.y-size/2}px,0)`;
+      const distance=Math.hypot(to.x-startPoint.x,to.y-startPoint.y);
+
+      let duration=base.duration;
+      if(settings.pieceAnimation==='dynamic') duration=Math.round(Math.max(120,Math.min(420,distance*1.8)));
+      if(distance<2) duration=Math.min(duration,90);
+
+      const midpoint=fraction=>`translate3d(${startPoint.x-size/2+(to.x-startPoint.x)*fraction}px,${startPoint.y-size/2+(to.y-startPoint.y)*fraction}px,0)`;
+      let keyframes;
+      if(settings.pieceAnimation==='arcade'){
+        keyframes=[{transform:startTransform},{transform:`${midpoint(.58)} scale(1.035)`},{transform:endTransform}];
+      } else if(settings.pieceAnimation==='dynamic'){
+        keyframes=[{transform:startTransform},{transform:`${midpoint(.72)} scale(1.025)`},{transform:endTransform}];
+      } else {
+        keyframes=[{transform:startTransform},{transform:endTransform}];
+      }
+
+      const animator=makeAnimator(leg.piece,size,settings.pieceAnimation);
+      animator.style.transform=startTransform;
+      animators.push(animator);
+      longest=Math.max(longest,duration+leg.delay);
+
+      try{
+        animations.push(animator.animate(keyframes,{
+          duration, delay:leg.delay, easing:base.easing, fill:'both'
+        }));
+      }catch{
+        animator.style.transform=endTransform;
+      }
+    }
+
+    // The piece being taken. It is already gone from the board by now, so this
+    // is a copy that shrinks away on the square it stood on - without it a
+    // capture is the one move where something simply blinks out of existence.
+    const captured=move.captured;
+    if(captured){
+      const square=move.isEnPassant?[move.from[0],move.to[1]]:[move.to[0],move.to[1]];
+      const spot=boardSquareCenter(square[0],square[1]);
+      if(spot){
+        const size=spot.width*pieceScale(captured);
+        const ghost=makeAnimator(captured,size,'captured');
+        const at=`translate3d(${spot.x-size/2}px,${spot.y-size/2}px,0)`;
+        ghost.style.transform=at;
+        animators.push(ghost);
+        try{
+          animations.push(ghost.animate(
+            [{transform:`${at} scale(1)`,opacity:1},{transform:`${at} scale(.55)`,opacity:0}],
+            {duration:Math.max(140,base.duration*0.8),easing:'cubic-bezier(.4,0,.6,1)',fill:'both'}));
+        }catch{ ghost.remove(); }
+      }
+    }
+
+    if(!animators.length){ done(); return; }
 
     let finished=false;
     const finish=()=>{
       if(finished)return;
       finished=true;
-      try{animation?.cancel();}catch{}
-      animator.remove();
+      for(const a of animations){ try{a.cancel();}catch{} }
+      for(const el of animators) el.remove();
       done();
     };
 
-    let animation=null;
-    try {
-      animation=animator.animate(keyframes,{
-        duration,
-        easing:base.easing,
-        fill:'forwards'
-      });
-      animation.onfinish=finish;
-      animation.oncancel=finish;
-    } catch {
-      animator.style.transform=endTransform;
-      finish();
-    }
+    // Resolved together: the move is over when the last piece has landed.
+    Promise.all(animations.map(a=>a.finished.catch(()=>{}))).then(finish);
 
     // The same safety net the move transaction already gets, for the same
-    // reason: `onfinish` is not guaranteed to arrive. A backgrounded tab all
-    // but stops the animation clock, so the callback can be minutes late or
-    // never come - and every missed one leaves a floating piece in the DOM.
-    // The real position is already on the board by now, so removing the
-    // animator early costs nothing.
-    window.setTimeout(finish,duration+200);
+    // reason: `finished` is not guaranteed to settle. A backgrounded tab all
+    // but stops the animation clock, so it can resolve minutes late or never -
+    // and every missed one leaves a floating piece in the DOM. The real
+    // position is already on the board, so removing them early costs nothing.
+    window.setTimeout(finish,longest+220);
   }
 
   function commitMove(move, interaction={dragged:false}){
@@ -676,14 +726,22 @@
       return;
     }
 
-    const target=document.querySelector(`.square[data-row="${move.to[0]}"][data-col="${move.to[1]}"]`);
-    target?.classList.add('animation-target-hidden');
+    // Every square a piece is flying to, not just the mover's. The final
+    // position is already painted, so an unhidden destination shows the piece
+    // sitting there while its copy is still in the air - which is exactly what
+    // made castling look wrong: the rook had arrived before the king moved.
+    const landing=[move.to];
+    if(move.isCastle && move.rookTo) landing.push(move.rookTo);
+    const hidden=landing
+      .map(([r,c])=>document.querySelector(`.square[data-row="${r}"][data-col="${c}"]`))
+      .filter(Boolean);
+    for(const square of hidden) square.classList.add('animation-target-hidden');
 
     let completed=false;
     const finish=()=>{
       if(completed)return;
       completed=true;
-      target?.classList.remove('animation-target-hidden');
+      for(const square of hidden) square.classList.remove('animation-target-hidden');
       moveTransaction=null;
       // Do NOT rebuild the board here. The final state was already rendered;
       // rebuilding here was one of the sources of pointer/render races.
@@ -692,8 +750,10 @@
     animateMove(move,piece,interaction,finish);
 
     // Hard safety net: a visual animation can never lock gameplay forever,
-    // even if a browser refuses to fire an animation completion callback.
-    const duration=Math.max(120,(settings.animation?.duration||280)+180);
+    // even if a browser refuses to fire an animation completion callback. The
+    // castling rook starts a beat late, so the net has to outlast that too.
+    const stagger=move.isCastle?60:0;
+    const duration=Math.max(120,(settings.animation?.duration||280)+stagger+180);
     window.setTimeout(finish,duration);
     window.setTimeout(afterMoveSettled,duration+20);
   }

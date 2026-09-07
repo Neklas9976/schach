@@ -3,10 +3,26 @@
  *
  * Why synthesis instead of audio files: samples would be another set of
  * third-party assets with their own licence question - exactly the problem the
- * board and piece graphics already have - and several hundred kilobytes of
- * binaries in a project that otherwise ships only source. The Web Audio API
- * can produce a convincing wooden click from a noise burst and a short pitched
- * body, so nothing has to be downloaded or licensed.
+ * board and piece graphics already had - and several hundred kilobytes of
+ * binaries in a project that otherwise ships only source.
+ *
+ * How the sounds are built
+ * ------------------------
+ * A piece landing on a wooden board is two things at once:
+ *
+ *   1. a very short broadband transient - the click of the two surfaces
+ *      meeting, over in a few milliseconds, and
+ *   2. the board ringing afterwards at a handful of its own frequencies,
+ *      each fading at its own rate.
+ *
+ * The earlier version had only the first part, one filtered noise burst, which
+ * is why every move sounded like the same flat tap. Adding the resonances -
+ * modal synthesis, three damped sines - is what makes it read as wood rather
+ * than as a click.
+ *
+ * Every hit is also detuned slightly at random. Two identical impacts in a row
+ * are the giveaway that a sound is synthetic; real pieces never land twice the
+ * same way.
  *
  * The AudioContext is created on the first real user gesture. Browsers start
  * one in the "suspended" state otherwise, and a suspended context swallows
@@ -48,33 +64,39 @@
     return context;
   }
 
-  /** One second of white noise, reused by every percussive sound. */
+  /** Half a second of white noise, reused by every transient. */
   function ensureNoise(ctx) {
     if (noiseBuffer) return noiseBuffer;
-    const length = Math.floor(ctx.sampleRate * 0.4);
+    const length = Math.floor(ctx.sampleRate * 0.5);
     noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
     return noiseBuffer;
   }
 
+  /** A small random multiplier, so no two hits are identical. */
+  function vary(spread = 0.06) {
+    return 1 + (Math.random() * 2 - 1) * spread;
+  }
+
   /**
-   * The percussive part of a piece landing: a filtered noise burst with a very
-   * short decay. `tone` shifts the band-pass, which is what separates a light
-   * tap from a heavier thud.
+   * The click: a noise burst through a band-pass, gone in milliseconds.
+   * `tone` is where the two surfaces meet - higher for a hard tap, lower for
+   * something heavy landing flat.
    */
-  function click(ctx, at, { gain = 0.5, tone = 1800, decay = 0.055, q = 1.2 } = {}) {
+  function transient(ctx, at, { gain = 0.5, tone = 2200, q = 0.9, decay = 0.02 } = {}) {
     const source = ctx.createBufferSource();
     source.buffer = ensureNoise(ctx);
+    source.playbackRate.value = vary(0.12);
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = tone;
+    filter.frequency.value = tone * vary(0.08);
     filter.Q.value = q;
 
     const envelope = ctx.createGain();
     envelope.gain.setValueAtTime(0, at);
-    envelope.gain.linearRampToValueAtTime(gain, at + 0.004);
+    envelope.gain.linearRampToValueAtTime(gain, at + 0.001);
     envelope.gain.exponentialRampToValueAtTime(0.0001, at + decay);
 
     source.connect(filter).connect(envelope).connect(ctx.destination);
@@ -82,16 +104,75 @@
     source.stop(at + decay + 0.02);
   }
 
-  /** The pitched body under a click, or a standalone musical note. */
-  function tone(ctx, at, { freq = 220, gain = 0.25, duration = 0.12, type = 'sine', glide = null } = {}) {
+  /**
+   * One resonance of the board: a sine that starts loud and dies away. Several
+   * of these together are what the ear hears as "wood".
+   */
+  function mode(ctx, at, { freq, gain, decay, type = 'sine' }) {
     const osc = ctx.createOscillator();
     osc.type = type;
-    osc.frequency.setValueAtTime(freq, at);
-    if (glide !== null) osc.frequency.exponentialRampToValueAtTime(Math.max(20, glide), at + duration);
+    osc.frequency.value = freq * vary(0.03);
 
     const envelope = ctx.createGain();
     envelope.gain.setValueAtTime(0, at);
-    envelope.gain.linearRampToValueAtTime(gain, at + 0.008);
+    envelope.gain.linearRampToValueAtTime(gain, at + 0.004);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+
+    osc.connect(envelope).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + decay + 0.02);
+  }
+
+  /**
+   * A piece meeting the board.
+   *
+   * `weight` shifts the resonances down and lengthens them - a queen landing
+   * rather than a pawn. `brightness` moves the initial click, which is mostly
+   * how hard the contact was.
+   */
+  function woodImpact(ctx, at, { gain = 1, weight = 1, brightness = 1 } = {}) {
+    transient(ctx, at, { gain: 0.42 * gain, tone: 2300 * brightness, decay: 0.018, q: 0.8 });
+
+    // Three modes, falling in level and decaying faster as they rise - which
+    // is how a struck solid body actually behaves.
+    const base = 196 / weight;
+    mode(ctx, at, { freq: base,        gain: 0.30 * gain, decay: 0.11 * weight });
+    mode(ctx, at, { freq: base * 1.74, gain: 0.17 * gain, decay: 0.07 * weight });
+    mode(ctx, at, { freq: base * 3.12, gain: 0.08 * gain, decay: 0.04 * weight });
+  }
+
+  /** A short wooden scrape - one piece sliding against another. */
+  function scrape(ctx, at, { gain = 0.2, duration = 0.05 } = {}) {
+    const source = ctx.createBufferSource();
+    source.buffer = ensureNoise(ctx);
+    source.playbackRate.value = 0.55 * vary(0.1);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(900 * vary(), at);
+    filter.frequency.exponentialRampToValueAtTime(1700, at + duration);
+    filter.Q.value = 2.4;
+
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0, at);
+    envelope.gain.linearRampToValueAtTime(gain, at + duration * 0.35);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+
+    source.connect(filter).connect(envelope).connect(ctx.destination);
+    source.start(at);
+    source.stop(at + duration + 0.02);
+  }
+
+  /** A clean musical note, for the sounds that are signals rather than events. */
+  function tone(ctx, at, { freq = 440, gain = 0.2, duration = 0.15, type = 'sine' } = {}) {
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = freq;
+
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0, at);
+    envelope.gain.linearRampToValueAtTime(gain, at + 0.012);
+    envelope.gain.setValueAtTime(gain, at + duration * 0.55);
     envelope.gain.exponentialRampToValueAtTime(0.0001, at + duration);
 
     osc.connect(envelope).connect(ctx.destination);
@@ -100,53 +181,89 @@
   }
 
   const VOICES = {
+    /** A piece set down on an empty square. One impact, nothing else. */
     move(ctx, t, v) {
-      click(ctx, t, { gain: 0.55 * v, tone: 1900, decay: 0.05 });
-      tone(ctx, t, { freq: 180, gain: 0.18 * v, duration: 0.07, type: 'triangle' });
+      woodImpact(ctx, t, { gain: 0.9 * v, weight: 1, brightness: 1 });
     },
+
+    /**
+     * A capture is three sounds, not one.
+     *
+     *   1. the piece being taken is knocked off its square - lighter, higher,
+     *      with the scrape of the two pieces touching,
+     *   2. a beat later the capturing piece settles where it stood: heavier
+     *      and louder, landing with the whole move behind it, and
+     *   3. further off, the captured piece is set down beside the board -
+     *      quiet, dull, and without the board's resonance under it.
+     *
+     * A single thump is what the earlier version had, and it is why a capture
+     * used to sound exactly like an ordinary move, only louder.
+     */
     capture(ctx, t, v) {
-      // Heavier and grittier than a quiet move: a lower band and a longer tail.
-      click(ctx, t, { gain: 0.75 * v, tone: 950, decay: 0.1, q: 0.8 });
-      tone(ctx, t, { freq: 120, gain: 0.26 * v, duration: 0.11, type: 'triangle' });
+      woodImpact(ctx, t, { gain: 0.62 * v, weight: 0.78, brightness: 1.25 });
+      scrape(ctx, t + 0.004, { gain: 0.16 * v, duration: 0.06 });
+      woodImpact(ctx, t + 0.062, { gain: 1.05 * v, weight: 1.22, brightness: 0.88 });
+      // Set down off the board: soft, short and dark. Loud enough to be part
+      // of the gesture, quiet enough not to become a third beat you count.
+      woodImpact(ctx, t + 0.23, { gain: 0.2 * v, weight: 0.7, brightness: 0.45 });
     },
+
+    /** Two pieces land, king first and rook after - as the board shows it. */
     castle(ctx, t, v) {
-      // Two pieces land, so the sound is two taps rather than one.
-      VOICES.move(ctx, t, v * 0.9);
-      VOICES.move(ctx, t + 0.085, v * 0.75);
+      woodImpact(ctx, t, { gain: 0.85 * v, weight: 1.05 });
+      woodImpact(ctx, t + 0.078, { gain: 0.72 * v, weight: 0.92, brightness: 1.1 });
     },
+
+    /** The move lands, and a short tense interval says what it did. */
     check(ctx, t, v) {
-      click(ctx, t, { gain: 0.4 * v, tone: 2600, decay: 0.04 });
-      tone(ctx, t + 0.01, { freq: 880, gain: 0.2 * v, duration: 0.1, type: 'square' });
-      tone(ctx, t + 0.1, { freq: 1174, gain: 0.18 * v, duration: 0.12, type: 'square' });
+      woodImpact(ctx, t, { gain: 0.85 * v, weight: 0.95, brightness: 1.15 });
+      tone(ctx, t + 0.045, { freq: 784, gain: 0.13 * v, duration: 0.1, type: 'triangle' });
+      tone(ctx, t + 0.115, { freq: 1046, gain: 0.12 * v, duration: 0.14, type: 'triangle' });
     },
+
+    /** The pawn is set down, then something better is put in its place. */
     promote(ctx, t, v) {
-      const notes = [523, 659, 784, 1046];
-      notes.forEach((freq, i) => tone(ctx, t + i * 0.07, { freq, gain: 0.2 * v, duration: 0.16, type: 'triangle' }));
+      woodImpact(ctx, t, { gain: 0.7 * v, weight: 0.9 });
+      [659, 880, 1318].forEach((freq, i) =>
+        tone(ctx, t + 0.05 + i * 0.06, { freq, gain: 0.11 * v, duration: 0.2, type: 'triangle' }));
     },
+
     gameStart(ctx, t, v) {
-      tone(ctx, t, { freq: 392, gain: 0.18 * v, duration: 0.14, type: 'sine' });
-      tone(ctx, t + 0.1, { freq: 587, gain: 0.18 * v, duration: 0.2, type: 'sine' });
+      woodImpact(ctx, t, { gain: 0.5 * v, weight: 1.3, brightness: 0.8 });
+      tone(ctx, t + 0.03, { freq: 392, gain: 0.11 * v, duration: 0.16 });
+      tone(ctx, t + 0.13, { freq: 587, gain: 0.11 * v, duration: 0.24 });
     },
+
     gameEndWin(ctx, t, v) {
-      const notes = [523, 659, 784, 1046];
-      notes.forEach((freq, i) => tone(ctx, t + i * 0.11, { freq, gain: 0.22 * v, duration: 0.3, type: 'sine' }));
+      [523, 659, 784, 1046].forEach((freq, i) =>
+        tone(ctx, t + i * 0.1, { freq, gain: 0.15 * v, duration: 0.34 }));
     },
+
     gameEndLoss(ctx, t, v) {
-      const notes = [523, 440, 349, 262];
-      notes.forEach((freq, i) => tone(ctx, t + i * 0.13, { freq, gain: 0.22 * v, duration: 0.32, type: 'sine' }));
+      [523, 440, 349, 262].forEach((freq, i) =>
+        tone(ctx, t + i * 0.13, { freq, gain: 0.15 * v, duration: 0.36 }));
     },
+
     gameEndDraw(ctx, t, v) {
-      tone(ctx, t, { freq: 440, gain: 0.2 * v, duration: 0.25, type: 'sine' });
-      tone(ctx, t + 0.16, { freq: 440, gain: 0.16 * v, duration: 0.3, type: 'sine' });
+      tone(ctx, t, { freq: 440, gain: 0.14 * v, duration: 0.28 });
+      tone(ctx, t + 0.17, { freq: 440, gain: 0.11 * v, duration: 0.32 });
     },
+
+    /** A refusal: dull and short, deliberately not musical. */
     illegal(ctx, t, v) {
-      tone(ctx, t, { freq: 160, gain: 0.22 * v, duration: 0.13, type: 'sawtooth', glide: 90 });
+      transient(ctx, t, { gain: 0.3 * v, tone: 320, decay: 0.05, q: 1.6 });
+      mode(ctx, t, { freq: 118, gain: 0.2 * v, decay: 0.1, type: 'triangle' });
     },
+
     lowTime(ctx, t, v) {
-      tone(ctx, t, { freq: 1046, gain: 0.16 * v, duration: 0.07, type: 'square' });
+      tone(ctx, t, { freq: 1046, gain: 0.11 * v, duration: 0.07, type: 'square' });
     },
+
+    /** A premove going on the board: quieter than a real move, because it is
+        not one yet. */
     notify(ctx, t, v) {
-      tone(ctx, t, { freq: 784, gain: 0.16 * v, duration: 0.1, type: 'sine' });
+      transient(ctx, t, { gain: 0.16 * v, tone: 2600, decay: 0.012 });
+      mode(ctx, t, { freq: 660, gain: 0.07 * v, decay: 0.05 });
     }
   };
 
@@ -179,6 +296,20 @@
       try {
         voice(ctx, ctx.currentTime + 0.005, settings.volume);
       } catch { /* a sound must never break the move it belongs to */ }
+    },
+
+    /**
+     * Writes a voice into a context the caller owns, at a time it chooses.
+     *
+     * Exists so the sounds can be rendered offline and looked at rather than
+     * only listened to - a capture is supposed to be two impacts, and that is
+     * a claim a waveform can settle. Also what a settings preview would use.
+     */
+    renderTo(ctx, name, at = 0, volume = settings.volume) {
+      const voice = VOICES[name];
+      if (!voice || !ctx) return false;
+      voice(ctx, at, volume);
+      return true;
     },
 
     /**

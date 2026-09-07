@@ -1245,3 +1245,8 @@ html.ai-thinking.premove-possible .square { cursor: default; }
     color: #fff;
 }
 .action-button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* A captured piece shrinks away on the square it stood on. Without it a
+   capture is the one move where something simply blinks out of existence
+   between two frames. */
+.move-animator.captured { z-index: 88; }

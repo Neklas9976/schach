@@ -41,7 +41,24 @@ test('a move animation always cleans up its floating piece', () => {
   // in the DOM, invisible only because it came to rest exactly on top of the
   // real piece. A timeout has to remove it the same way the move transaction
   // already has a timeout releasing the board.
-  assert.match(code, /window\.setTimeout\(finish,duration\+\d+\);/);
+  assert.match(code, /window\.setTimeout\(finish,longest\+\d+\);/);
+  // The net has to outlast the slowest leg, not the first one: castling starts
+  // the rook after the king.
+  assert.match(code, /longest=Math\.max\(longest,duration\+leg\.delay\)/);
+});
+
+test('every piece a move involves is animated, not just the mover', () => {
+  // Castling moves two. The board used to animate only the king, so the rook
+  // appeared at its destination the moment the final position was painted -
+  // which is what made castling look broken.
+  assert.match(code, /if\(move\.isCastle && move\.rookFrom && move\.rookTo\)\{/);
+  assert.match(code, /travellers\.push\(\{piece:rook/);
+  // And both destinations are covered while their pieces are still in flight.
+  assert.match(code, /if\(move\.isCastle && move\.rookTo\) landing\.push\(move\.rookTo\);/);
+});
+
+test('the move is over only once the last piece has landed', () => {
+  assert.match(code, /Promise\.all\(animations\.map\(a=>a\.finished\.catch\(\(\)=>\{\}\)\)\)\.then\(finish\)/);
 });
 
 test('a new game clears anything still animating from the old one', () => {
