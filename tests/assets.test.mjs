@@ -25,10 +25,17 @@ function filesUnder(dir, extensions) {
   return out;
 }
 
+// Third-party code that ships as-is. It is never edited here, so scanning it
+// for our own rules would only report its own documentation.
+const VENDORED = ['stockfish.js'];
+
+// Exactly what a static host would serve: the page and everything under
+// static/. Named rather than discovered from the root, which would wander into
+// .git, node_modules and the engine/ download.
 const SHIPPED = [
-  ...filesUnder(path.join(root, 'static'), ['.js', '.css']),
-  ...filesUnder(path.join(root, 'templates'), ['.html'])
-];
+  path.join(root, 'index.html'),
+  ...filesUnder(path.join(root, 'static'), ['.js', '.css'])
+].filter(f => !VENDORED.includes(path.basename(f)));
 
 const PIECES = [
   'white-king', 'white-queen', 'white-rook', 'white-bishop', 'white-knight', 'white-pawn',
@@ -36,6 +43,31 @@ const PIECES = [
 ];
 
 const pieceDir = path.join(root, 'static', 'pieces', 'cburnett');
+
+/**
+ * Strips comments before scanning for forbidden patterns.
+ *
+ * Otherwise a rule fires on the comment that explains it: ai.js documents why
+ * "/static/..." must not be used, and that sentence is not a use of it. The
+ * guard on the line-comment pattern keeps it from eating "https://".
+ */
+function code(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+test('the bundled engine fetches nothing from the network', () => {
+  // Emscripten loads the .wasm through XMLHttpRequest. That request must stay
+  // relative - an absolute one would put a third-party host in the load path
+  // of every visitor.
+  const file = path.join(root, 'static', 'stockfish.js');
+  const text = fs.readFileSync(file, 'utf8');
+  const urls = [...text.matchAll(/https?:\/\/[^\s"'`)]+/g)].map(m => m[0]);
+  // The only one is the project's own homepage, in the licence header.
+  assert.deepEqual(urls, ['http://github.com/nmrugg/stockfish.js']);
+  assert.ok(fs.existsSync(path.join(root, 'static', 'stockfish.wasm')), 'the wasm payload must ship alongside');
+});
 
 test('the app loads nothing from outside itself', () => {
   // The SVG namespace is a identifier, not a fetch, and is the one allowed
@@ -100,7 +132,9 @@ test('the piece filenames are the ones the board asks for', () => {
   for (const name of PIECES) {
     assert.ok(appearance.includes(`'${name}'`), `appearance.js never asks for ${name}`);
   }
-  assert.match(appearance, /\/static\/pieces\//);
+  // Relative, never rooted: a project page lives under /<repo>/.
+  assert.match(appearance, /static\/pieces\//);
+  assert.equal(/['"`]\/static\//.test(appearance), false, 'paths must not start at the domain root');
 });
 
 test('the artwork licence is documented where it can be found', () => {
@@ -114,4 +148,38 @@ test('the artwork licence is documented where it can be found', () => {
   assert.match(text, /BSD/);
   assert.match(text, /Stockfish/);
   assert.match(text, /GNU General Public License/);
+});
+
+test('no runtime path starts at the domain root', () => {
+  // Published as a project page the site lives at /<repo>/, where a leading
+  // slash resolves to the domain root and every asset and endpoint 404s.
+  for (const file of SHIPPED) {
+    if (path.extname(file) !== '.js') continue;
+    for (const match of code(fs.readFileSync(file, 'utf8')).matchAll(/['"`](\/(?:static|api)\/[^'"`]*)['"`]/g)) {
+      assert.fail(`${path.relative(root, file)} uses the absolute path ${match[1]}`);
+    }
+  }
+});
+
+test('the page is a plain file, not a template', () => {
+  // The published site is static, so a server-rendered page would mean the
+  // version people play on is not the version developed here.
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.equal(/\{\{|\{%/.test(html), false, 'index.html still contains template syntax');
+  assert.match(html, /src="static\//);
+  assert.equal(/(src|href)="\//.test(html), false, 'asset paths must not start at the domain root');
+});
+
+test('the project is licensed, and under the licence Stockfish forces', () => {
+  // Shipping the WebAssembly build means distributing GPL software, which
+  // binds the whole work. Without a LICENSE file the code is formally "all
+  // rights reserved" - the opposite of what is intended, and incompatible
+  // with what is bundled.
+  const licence = fs.readFileSync(path.join(root, 'LICENSE'), 'utf8');
+  assert.match(licence, /GNU GENERAL PUBLIC LICENSE/);
+  assert.match(licence, /Version 3, 29 June 2007/);
+
+  const notes = fs.readFileSync(path.join(root, 'ATTRIBUTIONS.md'), 'utf8');
+  assert.match(notes, /stockfish\.wasm/, 'the bundled engine must be declared');
+  assert.match(notes, /nmrugg\/stockfish\.js/, 'with where it came from');
 });

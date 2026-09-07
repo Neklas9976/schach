@@ -158,7 +158,7 @@ function loadAI({ engineAvailable = false, serverFails = false, builtinFails = f
     },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
     async fetch(url, init) {
-      if (url === '/api/engine/status') {
+      if (url === 'api/engine/status') {
         requests.push({ url });
         return {
           ok: true,
@@ -167,7 +167,7 @@ function loadAI({ engineAvailable = false, serverFails = false, builtinFails = f
             : { available: false, reason: 'Keine Engine gefunden.' })
         };
       }
-      if (url === '/api/engine/bestmove') {
+      if (url === 'api/engine/bestmove') {
         requests.push(JSON.parse(init.body));
         if (serverFails) return { ok: false, status: 503, json: async () => ({ error: 'Engine weg' }) };
         return { ok: true, json: async () => ({ bestmove: 'e2e4', depth: 20, score_cp: 31, mate: null }) };
@@ -220,9 +220,18 @@ test('a cold start switches to the native engine when one is installed', async (
   assert.equal(ai.getSettings().backend, 'server');
 });
 
-test('a cold start stays on the built-in engine when none is installed', async () => {
+test('without a server the cold start takes the engine that ships with the app', async () => {
+  // Stockfish as WebAssembly is bundled, so it is always available and always
+  // far stronger than the built-in search. The built-in one is the floor that
+  // guarantees a game, not a preference.
   const { AI: ai } = loadAI({ engineAvailable: false });
-  assert.equal(await ai.autoSelectBackend(), 'builtin');
+  assert.equal(await ai.autoSelectBackend(), 'stockfish');
+});
+
+test('the stored default stays builtin so a broken worker still leaves a game', async () => {
+  // requestMove falls back on its own if the upgrade turns out not to run.
+  const { AI: ai } = loadAI({ engineAvailable: false });
+  assert.equal(ai.getSettings().backend, 'builtin');
 });
 
 test('auto-selection never overrules an engine the player picked', async () => {
@@ -283,7 +292,7 @@ test('callers asking for the engine status at once share one request', () => {
   // answer is wasteful, and three answers can disagree with each other.
   const { AI: ai, requests } = loadAI({ engineAvailable: true });
   const answers = Promise.all([ai.serverEngineStatus(), ai.serverEngineStatus(), ai.serverEngineStatus()]);
-  assert.equal(requests.filter(r => r.url === '/api/engine/status').length, 1);
+  assert.equal(requests.filter(r => r.url === 'api/engine/status').length, 1);
   return answers.then(all => {
     assert.equal(all.length, 3);
     for (const status of all) assert.equal(status.available, true);
@@ -294,7 +303,7 @@ test('a later question still reaches the server', () => {
   // Caching the answer would survive dropping Stockfish into place, which is
   // the one moment the answer has to change.
   const { AI: ai, requests } = loadAI({ engineAvailable: false });
-  const count = () => requests.filter(r => r.url === '/api/engine/status').length;
+  const count = () => requests.filter(r => r.url === 'api/engine/status').length;
   return ai.serverEngineStatus()
     .then(() => new Promise(resolve => setTimeout(resolve, 0)))
     .then(() => ai.serverEngineStatus())

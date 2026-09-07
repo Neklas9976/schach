@@ -10,9 +10,10 @@ venv/
 engine/*
 !engine/README.md
 
-# Optionaler WASM-Build von Stockfish (ebenfalls gross, ebenfalls GPL)
-static/stockfish.js
-static/stockfish.wasm
+# Der WASM-Build von Stockfish wird jetzt bewusst MITGELIEFERT: ohne ihn haette
+# die veroeffentlichte Seite weder Bewertungsbalken noch Analyse noch Hinweis.
+# Er steht unter GPLv3 - deshalb steht dieses Projekt ebenfalls unter GPLv3.
+# Siehe LICENSE und ATTRIBUTIONS.md.
 
 # Node
 node_modules/

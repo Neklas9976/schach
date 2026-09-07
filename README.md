@@ -1,4 +1,11 @@
-# Schachprogramm v3.6
+# Schachprogramm v3.7
+
+Schachprogramm mit vollständigen Regeln, Schachuhr, Computergegner, Partie-Analyse,
+PGN/FEN, Archiv und Sound. Läuft als reine statische Seite – Stockfish rechnet
+als WebAssembly im Browser, es gibt keinen Server.
+
+**Lizenz:** GNU GPL v3 (siehe `LICENSE`) · **Fremdinhalte:** `ATTRIBUTIONS.md`
+
 
 Schachprogramm mit vollständigen Regeln, Schachuhr, Computergegner (eingebaut
 und nativ per Stockfish), Partie-Analyse, PGN/FEN und Sound.
@@ -109,6 +116,94 @@ gar keine Option.
 Stockfish ist bewusst **nicht** mitgeliefert: Die Engine ist über 100 MB groß
 und steht unter der GPL, woraus bei einer Weitergabe eigene Pflichten
 entstehen. Lokal genutzt ist das unproblematisch.
+
+## Veröffentlichen (v3.7)
+
+Die Seite ist eine reine Dateiablage: `index.html` plus `static/`. Es gibt
+keinen Server, keine Datenbank, keine Anmeldung und keine Kosten.
+
+### Warum ohne Server
+
+Der Flask-Server hatte genau eine Aufgabe: die native Stockfish-Programmdatei
+starten, die ein Browser nicht ausführen kann. Öffentlich wäre er ein Problem
+gewesen – `engine_manager` ist ein Modul-Singleton, alle Besucher hätten sich
+**einen** Stockfish-Prozess hinter **einem** Lock geteilt. Zwei gleichzeitige
+Spieler und einer wartet auf den anderen; ein einziger Aufruf von
+`/api/engine/evaluate` mit `movetime=60000` hätte die Seite für alle blockiert.
+
+Stattdessen läuft Stockfish jetzt als WebAssembly **im Browser des Besuchers**.
+Gegner, Bewertungsbalken, Hinweis und Partie-Analyse funktionieren damit
+vollständig – nur eben auf dem Rechner, der auch den Nutzen davon hat. Die
+Rechenlast wächst mit den Besuchern, ohne dass irgendetwas geteilt wird.
+
+Der Flask-Server bleibt für die lokale Entwicklung erhalten. Liegt eine native
+Stockfish-Datei in `engine/`, benutzt die App sie automatisch – sie ist
+deutlich stärker als der Browser-Build. Fehlt sie, nimmt sie denselben
+WebAssembly-Build wie die veröffentlichte Seite.
+
+### Alle Pfade sind relativ
+
+Nichts im ausgelieferten Code beginnt mit `/`. Unter einer Projektseite liegt
+die Anwendung auf `https://name.github.io/repo/`, wo `/static/app.js` auf den
+Domainstamm zeigen und ins Leere laufen würde. Gegen das Dokument aufgelöst
+stimmt beides. `tests/assets.test.mjs` hält das fest.
+
+### GitHub Pages
+
+1. Repository auf GitHub anlegen (öffentlich – die GPL verlangt, dass der
+   Quelltext verfügbar ist).
+2. Hochladen:
+
+   ```bash
+   git remote add origin https://github.com/BENUTZER/REPO.git
+   git push -u origin main
+   ```
+
+3. Im Repository unter **Settings → Pages**: *Source* auf **Deploy from a
+   branch**, Branch `main`, Ordner `/ (root)`.
+
+Nach ein bis zwei Minuten liegt die Seite unter
+`https://BENUTZER.github.io/REPO/`.
+
+Die Datei `.nojekyll` schaltet die Jekyll-Verarbeitung ab. Ohne sie lässt
+GitHub Pages Dateien und Ordner mit führendem Unterstrich stillschweigend weg –
+für eine reine Dateiablage ist die Verarbeitung überflüssig und nur eine
+Fehlerquelle.
+
+### Netlify, Cloudflare Pages, jeder andere Hoster
+
+Kein Build-Schritt, kein Ausgabeordner: Repository verbinden, Build-Befehl leer
+lassen, Veröffentlichungsverzeichnis auf `/` setzen. Oder den Ordner schlicht
+per FTP hochladen.
+
+### Lokal ausprobieren, genau wie veröffentlicht
+
+```bash
+python -m http.server 8080
+```
+
+Dann `http://127.0.0.1:8080/` öffnen. Das ist exakt die Auslieferung, die auch
+online läuft – ohne Flask, ohne native Engine.
+
+### Was ein Besucher lädt
+
+| | |
+|---|---|
+| Seite, Skripte, Stil | ~200 KB |
+| Figuren (12 SVG) | 52 KB |
+| Stockfish (WASM) | 430 KB |
+| **Gesamt** | **unter 700 KB** |
+
+Stockfish wird erst geladen, wenn wirklich gerechnet werden soll.
+
+### Datenschutz
+
+Es gibt nichts zu melden: keine Anmeldung, keine Zählpixel, keine
+Fremdressourcen, kein Server, der etwas mitschreiben könnte. Partien,
+Einstellungen und die Statistik liegen im `localStorage` des Besuchers und
+verlassen sein Gerät nicht. Ob deine Rechtsordnung trotzdem ein Impressum
+verlangt, ist eine andere Frage – das hängt am Betreiber, nicht an der
+Technik.
 
 ## Darstellung und Rechtelage (v3.6)
 

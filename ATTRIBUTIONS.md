@@ -1,9 +1,12 @@
 # Verwendete Fremdinhalte
 
-Dieses Projekt enthält genau zwei Dinge, die nicht hier entstanden sind: den
-Figurensatz und – optional und nicht mitgeliefert – die Schach-Engine
-Stockfish. Alles andere (Quelltext, Layout, Brettfarben, Klänge) stammt aus
-diesem Projekt.
+Dieses Projekt enthält zwei Dinge, die nicht hier entstanden sind: den
+Figurensatz und die Schach-Engine Stockfish. Alles andere (Quelltext, Layout,
+Brettfarben, Klänge) stammt aus diesem Projekt.
+
+**Das Gesamtwerk steht unter der GNU General Public License v3** – siehe
+`LICENSE`. Das ist keine freie Wahl gewesen: Stockfish steht selbst unter
+GPLv3, und es wird mitgeliefert (siehe unten).
 
 > Hinweis: Das hier ist eine sorgfältige Zusammenstellung, keine
 > Rechtsberatung. Für eine Veröffentlichung mit echtem Risiko lohnt der Blick
@@ -45,18 +48,44 @@ zeichnet damit seine Schachdiagramme.
 
 ---
 
-## Schach-Engine — Stockfish (optional, **nicht** mitgeliefert)
+## Schach-Engine — Stockfish
 
-**Lizenz:** GNU General Public License v3
+Stockfish kommt hier in **zwei** Ausführungen vor.
 
-Stockfish wird bewusst nicht mit ausgeliefert. Das Programm läuft ohne; wer die
-volle Spielstärke will, legt die Datei selbst in den Ordner `engine/` (siehe
-`engine/README.md`).
+### 1. WebAssembly-Build — mitgeliefert
 
-Warum das wichtig ist: Die GPL verlangt bei einer **Weitergabe** von Stockfish,
-dass der Quelltext des Gesamtwerks unter GPL verfügbar gemacht wird. Solange
-die Engine nicht mitgeliefert wird, sondern der Nutzer sie selbst installiert,
-stellt sich diese Frage nicht.
+**Dateien:** `static/stockfish.js`, `static/stockfish.wasm` (zusammen ~430 KB)
+
+**Herkunft:** Stockfish.js von Nathan Rugg, <https://github.com/nmrugg/stockfish.js>,
+eine Übersetzung von Stockfish nach WebAssembly. Bezogen aus dem npm-Paket
+`stockfish@10.0.2`. Unverändert übernommen.
+
+**Lizenz:** GNU General Public License v3 (wie Stockfish selbst)
+
+Dieser Build ist der Grund, warum die veröffentlichte Seite ohne Server
+auskommt: Gegner, Bewertungsbalken, Hinweis und Partie-Analyse laufen alle im
+Browser des Besuchers. Es wird dabei nichts an einen Server geschickt.
+
+Warum ein einthreadiger Build: Mehrthreadige WebAssembly-Builds brauchen
+`SharedArrayBuffer` und dafür die Header `Cross-Origin-Opener-Policy` und
+`Cross-Origin-Embedder-Policy`. Statische Hoster wie GitHub Pages können keine
+eigenen Header setzen – ein solcher Build würde dort schlicht nicht starten.
+
+**Die Folge für dieses Projekt:** Wer GPL-Software weitergibt, muss das
+Gesamtwerk unter GPL stellen und den Quelltext verfügbar machen. Genau das
+passiert hier: Das Projekt steht unter GPLv3 (`LICENSE`), und der Quelltext
+liegt offen. Wer den Build wieder entfernt, ist an diese Bindung nicht mehr
+gebunden – dann entfallen allerdings Analyse, Hinweis und Bewertungsbalken.
+
+### 2. Nativer Build — **nicht** mitgeliefert, optional für lokal
+
+**Lizenz:** ebenfalls GNU General Public License v3
+
+Für die lokale Entwicklung kann zusätzlich die native Stockfish-Programmdatei
+in den Ordner `engine/` gelegt werden (siehe `engine/README.md`). Sie ist über
+100 MB groß, spielt deutlich stärker als der WebAssembly-Build und wird
+bewusst nicht mit verteilt. Das Programm läuft ohne sie; es nimmt dann den
+Browser-Build.
 
 ---
 

@@ -68,7 +68,7 @@
   function pieceUrl(setId, piece) {
     const set = PIECE_SET_BY_ID.get(setId) || PIECE_SET_BY_ID.get(DEFAULT_PIECES);
     const file = PIECE_FILES[piece];
-    return file ? `/static/pieces/${set.dir}/${file}.svg` : '';
+    return file ? new URL(`static/pieces/${set.dir}/${file}.svg`, document.baseURI).href : '';
   }
 
   function get(key, fallback) {

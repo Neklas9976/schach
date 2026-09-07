@@ -54,6 +54,25 @@
 
   const FILES = 'abcdefgh';
 
+  /**
+   * Resolves a file inside static/ against the page.
+   *
+   * Never an absolute "/static/..." path: published under a project page the
+   * site lives at /<repo>/, where a leading slash points at the domain root
+   * and every asset 404s. Resolved against the document it is correct both
+   * there and when a local server hands the page out at "/".
+   */
+  function assetPath(name) {
+    if (typeof document === 'undefined') return `static/${name}`;
+    return new URL(`static/${name}`, document.baseURI).href;
+  }
+
+  /** Same reasoning for the local server's endpoints. */
+  function apiPath(name) {
+    if (typeof document === 'undefined') return `api/engine/${name}`;
+    return new URL(`api/engine/${name}`, document.baseURI).href;
+  }
+
   function toUci(move) {
     const from = FILES[move.from[1]] + (8 - move.from[0]);
     const to = FILES[move.to[1]] + (8 - move.to[0]);
@@ -89,7 +108,7 @@
 
     function ensureWorker() {
       if (worker) return worker;
-      worker = new Worker('/static/ai-worker.js');
+      worker = new Worker(assetPath('ai-worker.js'));
       worker.onmessage = event => {
         const { type, id, result, message } = event.data || {};
         const entry = pending.get(id);
@@ -130,15 +149,20 @@
   }
 
   /**
-   * Stockfish over the standard UCI protocol.
+   * Stockfish compiled to WebAssembly, running in the visitor's browser.
    *
-   * Not bundled: the engine binary is several megabytes and carries its own
-   * licence (GPL), so it is loaded only if the user drops `stockfish.js` into
-   * /static/ themselves. Everything needed to drive it is implemented here.
+   * This is what makes the published site work without a server: the opponent,
+   * the evaluation bar, the hint and the game review all run here. It is
+   * shipped with the project (`static/stockfish.js` + `.wasm`, ~430 KB), which
+   * is why the project is under the GPL - see LICENSE.
    */
   function createStockfishBackend() {
     let engine = null;
     let ready = null;
+    // UCI is one stateful session. Two overlapping searches would interleave
+    // their output and neither caller could tell which `bestmove` was theirs -
+    // and the review asks for one position after another as fast as it can.
+    let queue = Promise.resolve();
 
     function send(command) {
       engine.postMessage(command);
@@ -148,13 +172,15 @@
       if (ready) return ready;
       ready = new Promise((resolve, reject) => {
         try {
-          engine = new Worker('/static/stockfish.js');
+          engine = new Worker(assetPath('stockfish.js'));
         } catch (error) {
-          reject(new Error('stockfish.js konnte nicht geladen werden'));
+          reject(new Error('Stockfish konnte nicht geladen werden'));
           return;
         }
 
-        const timeout = setTimeout(() => reject(new Error('Stockfish antwortet nicht')), 10000);
+        // The first call also compiles the WebAssembly module, which on a cold
+        // cache and a slow machine is a good deal longer than a search.
+        const timeout = setTimeout(() => reject(new Error('Stockfish antwortet nicht')), 30000);
         engine.onmessage = event => {
           const line = typeof event.data === 'string' ? event.data : '';
           if (line.startsWith('uciok')) {
@@ -164,44 +190,93 @@
         };
         engine.onerror = () => {
           clearTimeout(timeout);
-          reject(new Error('stockfish.js konnte nicht gestartet werden'));
+          reject(new Error('Stockfish konnte nicht gestartet werden'));
         };
         send('uci');
       });
       return ready;
     }
 
-    return {
-      name: 'stockfish',
-      async bestMove(state, level) {
+    /**
+     * One search, in the same shape the server endpoint returns, so callers do
+     * not care which engine answered them.
+     */
+    function search({ fen, movetime, skill = 20, elo = null }) {
+      const run = async () => {
         await init();
         return new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Stockfish hat nicht geantwortet')), level.maxTimeMs + 8000);
+          const info = { depth: null, score_cp: null, mate: null };
+          const timeout = setTimeout(() => {
+            engine.onmessage = null;
+            reject(new Error('Stockfish hat nicht geantwortet'));
+          }, movetime + 20000);
 
           engine.onmessage = event => {
             const line = typeof event.data === 'string' ? event.data : '';
+
+            if (line.startsWith('info ')) {
+              const tokens = line.split(/\s+/);
+              const depthAt = tokens.indexOf('depth');
+              if (depthAt >= 0) info.depth = Number(tokens[depthAt + 1]) || info.depth;
+              const scoreAt = tokens.indexOf('score');
+              if (scoreAt >= 0) {
+                const kind = tokens[scoreAt + 1];
+                const value = Number(tokens[scoreAt + 2]);
+                if (Number.isFinite(value)) {
+                  if (kind === 'cp') { info.score_cp = value; info.mate = null; }
+                  else if (kind === 'mate') { info.mate = value; info.score_cp = null; }
+                }
+              }
+              return;
+            }
+
             if (!line.startsWith('bestmove')) return;
             clearTimeout(timeout);
-
+            engine.onmessage = null;
             const token = line.split(/\s+/)[1];
-            if (!token || token === '(none)') { resolve(null); return; }
-
-            resolve({
-              uci: token,
-              from: parseUciSquare(token.slice(0, 2)),
-              to: parseUciSquare(token.slice(2, 4)),
-              promotion: token[4] || null
-            });
+            resolve({ bestmove: (!token || token === '(none)') ? null : token, ...info });
           };
 
           send('ucinewgame');
-          send(`setoption name Skill Level value ${level.skill}`);
-          send(`position fen ${toFen(state)}`);
-          send(`go movetime ${level.maxTimeMs}`);
+          send(`setoption name Skill Level value ${skill}`);
+          // Restated every time, "off" included: UCI options live as long as
+          // the process, so a capped level would otherwise stick.
+          if (elo == null) send('setoption name UCI_LimitStrength value false');
+          else {
+            send('setoption name UCI_LimitStrength value true');
+            send(`setoption name UCI_Elo value ${elo}`);
+          }
+          send(`position fen ${fen}`);
+          send(`go movetime ${movetime}`);
         });
+      };
+
+      // Chained whether or not the previous search succeeded; a failure must
+      // not wedge the queue for the rest of the session.
+      const result = queue.then(run, run);
+      queue = result.catch(() => {});
+      return result;
+    }
+
+    return {
+      name: 'stockfish',
+      search,
+      async bestMove(state, level) {
+        const answer = await search({
+          fen: toFen(state), movetime: level.maxTimeMs, skill: level.skill, elo: level.elo
+        });
+        if (!answer.bestmove) return null;
+        const token = answer.bestmove;
+        return {
+          uci: token,
+          from: parseUciSquare(token.slice(0, 2)),
+          to: parseUciSquare(token.slice(2, 4)),
+          promotion: token[4] || null,
+          info: { depth: answer.depth, scoreCp: answer.score_cp, mate: answer.mate }
+        };
       },
       dispose() {
-        if (engine) { engine.terminate(); engine = null; ready = null; }
+        if (engine) { engine.terminate(); engine = null; ready = null; queue = Promise.resolve(); }
       }
     };
   }
@@ -218,12 +293,12 @@
     return {
       name: 'server',
       async status() {
-        const response = await fetch('/api/engine/status');
+        const response = await fetch(apiPath('status'));
         if (!response.ok) throw new Error('Server nicht erreichbar');
         return response.json();
       },
       async bestMove(state, level) {
-        const response = await fetch('/api/engine/bestmove', {
+        const response = await fetch(apiPath('bestmove'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -309,7 +384,7 @@
     if (statusInFlight) return statusInFlight;
     statusInFlight = (async () => {
       try {
-        const response = await fetch('/api/engine/status');
+        const response = await fetch(apiPath('status'));
         if (!response.ok) return { available: false, reason: 'Server nicht erreichbar' };
         return await response.json();
       } catch (error) {
@@ -329,6 +404,54 @@
     window.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
+  /* ------------------------------------------------------------------ *
+   * Analysis
+   * ------------------------------------------------------------------ *
+   * The evaluation bar, the hint and the game review all ask one question:
+   * "how good is this position, and what is the best move?" They go through
+   * here rather than talking to an engine themselves, so the published site -
+   * which has no server at all - answers them from the browser instead.
+   */
+
+  // Deliberately its own engine, never the one playing the game. UCI is a
+  // single stateful session: sharing would put an evaluation in front of the
+  // opponent's move and stall the board on every turn.
+  let analysisEngine = null;
+  // Resolved once. The review asks dozens of questions in a row and a probe
+  // before each would be a round trip that always gives the same answer.
+  let analysisSource = null;
+
+  async function resolveAnalysisSource() {
+    if (analysisSource) return analysisSource;
+    const status = await serverEngineStatus();
+    analysisSource = status.available ? 'server' : 'wasm';
+    return analysisSource;
+  }
+
+  /**
+   * Scores one position. Resolves to the same shape either engine returns:
+   * `{ bestmove, depth, score_cp, mate }`, with the score from the side to
+   * move, exactly as UCI reports it.
+   *
+   * Never weakened by the difficulty setting - a bar that judges the position
+   * the way a deliberately handicapped opponent would says nothing.
+   */
+  async function analyse(fen, movetimeMs = 300) {
+    if (await resolveAnalysisSource() === 'server') {
+      const response = await fetch(apiPath('evaluate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fen, movetime: movetimeMs })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Engine-Fehler (HTTP ${response.status})`);
+      return data;
+    }
+
+    if (!analysisEngine) analysisEngine = createStockfishBackend();
+    return analysisEngine.search({ fen, movetime: movetimeMs, skill: 20, elo: null });
+  }
+
   const api = {
     LEVELS,
     MODES,
@@ -339,6 +462,9 @@
 
     getSettings() { return { ...settings, levelConfig: findLevel(settings.level) }; },
     serverEngineStatus,
+    analyse,
+    /** Which engine answers analysis, once decided. Null until first asked. */
+    analysisSource: () => analysisSource,
 
     isComputerGame() { return settings.mode === MODES.COMPUTER; },
     computerColor() { return settings.humanColor === 'white' ? 'black' : 'white'; },
@@ -365,21 +491,25 @@
     },
 
     /**
-     * Switches to the native engine when one is installed.
+     * Picks the strongest opponent this installation can actually provide.
      *
-     * The default cannot simply be 'server': most installations have no engine
-     * binary, and a default that fails on the first move is worse than one that
-     * is merely weaker. So the app starts on the always-available built-in
-     * engine and upgrades itself once the server confirms a native engine is
-     * actually there. Resolves to the backend in use afterwards.
+     * Order: the local server's native Stockfish, then the WebAssembly build
+     * that ships with the app, then the built-in search. The built-in engine is
+     * last because it is by far the weakest - it is the floor that guarantees
+     * a game rather than a preference.
+     *
+     * The stored default stays 'builtin' rather than 'stockfish' so a browser
+     * that cannot start the WebAssembly worker still has a working opponent;
+     * requestMove falls back on its own if the upgrade turns out not to run.
+     * Resolves to the backend in use afterwards.
      */
     async autoSelectBackend() {
       if (settings.backendPinned) return settings.backend;
       const status = await serverEngineStatus();
-      if (!status.available) return settings.backend;
-      if (settings.backend !== 'server') {
+      const wanted = status.available ? 'server' : 'stockfish';
+      if (settings.backend !== wanted) {
         api.dispose();
-        api.update({ backend: 'server' });
+        api.update({ backend: wanted });
       }
       return settings.backend;
     },
@@ -429,6 +559,12 @@
 
     dispose() {
       if (backend) { backend.dispose(); backend = null; }
+    },
+
+    /** Frees the analysis engine too; the board keeps its own separately. */
+    disposeAll() {
+      api.dispose();
+      if (analysisEngine) { analysisEngine.dispose(); analysisEngine = null; }
     }
   };
 

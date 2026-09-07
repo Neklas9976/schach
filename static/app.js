@@ -59,6 +59,9 @@
   // would simply be thrown away.
   let premove=null;
 
+  /** See ai.js assetPath: a leading slash breaks every project-page deploy. */
+  function staticUrl(name){ return new URL(`static/${name}`,document.baseURI).href; }
+
   const ASSETS={
     P:'white-pawn',R:'white-rook',N:'white-knight',B:'white-bishop',Q:'white-queen',K:'white-king',
     p:'black-pawn',r:'black-rook',n:'black-knight',b:'black-bishop',q:'black-queen',k:'black-king'
@@ -145,7 +148,7 @@
     return history[viewPly].state;
   }
 
-  function assetUrl(piece){ return typeof window.getPieceAssetUrl === 'function' ? window.getPieceAssetUrl(piece) : `/static/pieces/cburnett/${ASSETS[piece]}.svg`; }
+  function assetUrl(piece){ return typeof window.getPieceAssetUrl === 'function' ? window.getPieceAssetUrl(piece) : staticUrl(`pieces/cburnett/${ASSETS[piece]}.svg`); }
   function getPiece(r,c){return state.board[r][c];}
   function snapshot(){
     return {
@@ -261,7 +264,7 @@
           cell.pieceImg.addEventListener('error',()=>{
             if(cell.pieceImg.dataset.fallbackApplied!=='1' && cell.piece){
               cell.pieceImg.dataset.fallbackApplied='1';
-              cell.pieceImg.src=`/static/pieces/cburnett/${ASSETS[cell.piece]}.svg`;
+              cell.pieceImg.src=staticUrl(`pieces/cburnett/${ASSETS[cell.piece]}.svg`);
             }
           });
           cell.pieceWrap.appendChild(cell.pieceImg);
@@ -543,7 +546,7 @@
     const img=document.createElement('img');
     img.src=assetUrl(piece); img.alt='';
     img.addEventListener('error',()=>{
-      const fallback=`/static/pieces/cburnett/${ASSETS[piece]}.svg`;
+      const fallback=staticUrl(`pieces/cburnett/${ASSETS[piece]}.svg`);
       if(img.src!==new URL(fallback,location.href).href) img.src=fallback;
     },{once:true});
     animator.appendChild(img);
@@ -1125,15 +1128,17 @@
     return null;
   }
 
+  /**
+   * Scores a position for the bar, the hint and the review.
+   *
+   * Delegated to ChessAI rather than talking to an engine here, because which
+   * engine answers depends on where the app is running: the local server's
+   * native Stockfish when there is one, the WebAssembly build in the visitor's
+   * browser on the published site. Nothing above this line needs to know.
+   */
   async function requestEvaluation(fen,movetime=300){
-    const response=await fetch('/api/engine/evaluate',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({fen,movetime})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(data.error||`HTTP ${response.status}`);
-    return data;
+    if(!window.ChessAI) throw new Error('Keine Engine verfügbar');
+    return window.ChessAI.analyse(fen,movetime);
   }
 
   function paintEval(){
@@ -1292,7 +1297,8 @@
         return 'Prüfe native Engine …';
       }
       if(s.backend==='stockfish'){
-        return 'Stockfish wird aus /static/stockfish.js geladen (WASM-Build). Fehlt die Datei, erscheint hier ein Engine-Fehler.';
+        const strength=s.levelConfig.elo==null?'ohne Stärkebegrenzung':`begrenzt auf ca. ${s.levelConfig.elo} Elo`;
+        return `Stockfish läuft als WebAssembly in deinem Browser – ${strength}, bis ${(s.levelConfig.maxTimeMs/1000).toFixed(1)} s pro Zug. Nichts wird an einen Server geschickt.`;
       }
       return `Die eingebaute Engine rechnet bis Tiefe ${s.levelConfig.maxDepth} und maximal ${(s.levelConfig.maxTimeMs/1000).toFixed(1)} s pro Zug. Sie läuft in einem Web Worker, das Brett bleibt also bedienbar.`;
     };
@@ -1337,7 +1343,7 @@
     if(backendSelect){
       const wasmOption=backendSelect.querySelector('option[value="stockfish"]');
       if(wasmOption){
-        fetch('/static/stockfish.js',{method:'HEAD'})
+        fetch(staticUrl('stockfish.js'),{method:'HEAD'})
           .then(r=>{ if(!r.ok && window.ChessAI.getSettings().backend!=='stockfish') wasmOption.remove(); })
           .catch(()=>{ if(window.ChessAI.getSettings().backend!=='stockfish') wasmOption.remove(); });
       }
@@ -1885,7 +1891,7 @@
       }
     }catch(error){
       reviewStatus.textContent='';
-      reviewSummary.textContent=`Analyse nicht möglich: ${error.message}. Sie braucht die native Engine.`;
+      reviewSummary.textContent=`Analyse nicht möglich: ${error.message}.`;
       reviewRunning=false;
       return;
     }
@@ -2055,7 +2061,7 @@
     window.ChessAI?.serverEngineStatus().then(status=>{
       evalHint.textContent=status.available
         ? `Bewertung durch ${status.name||status.file||'die native Engine'} – eigener Prozess, der Gegner wird dadurch nicht langsamer.`
-        : 'Ohne native Engine bleibt der Balken leer. Lege Stockfish in den Ordner engine/.';
+        : 'Bewertung durch Stockfish als WebAssembly in deinem Browser – eigene Instanz, der Gegner wird dadurch nicht langsamer.';
     });
   }
   if(evalToggle){

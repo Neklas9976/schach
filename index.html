@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0c1420">
     <title>Schach</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
     <main class="app-shell">
@@ -104,6 +104,12 @@
                     </div>
                 </aside>
             </div>
+
+            <footer class="site-footer">
+                <span>Freie Software unter der <a href="LICENSE">GNU GPL v3</a>.</span>
+                <span>Figuren: Cburnett (Wikimedia Commons) &middot; Engine: Stockfish &middot; <a href="ATTRIBUTIONS.md">Herkunft und Lizenzen</a></span>
+                <span>Läuft vollständig in deinem Browser. Partien und Einstellungen bleiben auf diesem Gerät.</span>
+            </footer>
         </section>
     </main>
 
@@ -374,16 +380,16 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='appearance.js') }}"></script>
-    <script src="{{ url_for('static', filename='settings.js') }}"></script>
-    <script src="{{ url_for('static', filename='chess-engine.js') }}"></script>
-    <script src="{{ url_for('static', filename='notation.js') }}"></script>
-    <script src="{{ url_for('static', filename='openings.js') }}"></script>
-    <script src="{{ url_for('static', filename='sound.js') }}"></script>
-    <script src="{{ url_for('static', filename='review.js') }}"></script>
-    <script src="{{ url_for('static', filename='archive.js') }}"></script>
-    <script src="{{ url_for('static', filename='clock.js') }}"></script>
-    <script src="{{ url_for('static', filename='ai.js') }}"></script>
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="static/appearance.js"></script>
+    <script src="static/settings.js"></script>
+    <script src="static/chess-engine.js"></script>
+    <script src="static/notation.js"></script>
+    <script src="static/openings.js"></script>
+    <script src="static/sound.js"></script>
+    <script src="static/review.js"></script>
+    <script src="static/archive.js"></script>
+    <script src="static/clock.js"></script>
+    <script src="static/ai.js"></script>
+    <script src="static/app.js"></script>
 </body>
 </html>

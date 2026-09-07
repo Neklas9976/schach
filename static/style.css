@@ -924,3 +924,24 @@ html.ai-thinking.premove-possible .square { cursor: default; }
     .archive-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
     .archive-load { display: none; }
 }
+
+/* ===================================================================== *
+ * Footer
+ * ===================================================================== */
+
+/* The licence notice belongs where visitors are, not only in a file they
+   would have to go looking for: they download this software to run it. */
+.site-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-top: clamp(16px, 2vw, 26px);
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.07);
+    font-size: .7rem;
+    line-height: 1.6;
+    color: rgba(237, 243, 255, .42);
+}
+
+.site-footer a { color: rgba(237, 243, 255, .66); }
+.site-footer a:hover { color: var(--text); }

@@ -3,12 +3,16 @@ import atexit
 import threading
 import webbrowser
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, request, send_from_directory
 
 from engine_bridge import EngineError, EngineManager
 
 BASE_DIR = Path(__file__).resolve().parent
 
+# The local server exists for one reason: a browser cannot run a native
+# binary, so it drives Stockfish for the evaluation bar and the review at full
+# native strength. Everything else is plain files, which is what makes the
+# published site work without it.
 app = Flask(__name__)
 engine_manager = EngineManager(BASE_DIR)
 atexit.register(engine_manager.shutdown)
@@ -16,7 +20,14 @@ atexit.register(engine_manager.shutdown)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    """Hands out the same index.html the published site uses.
+
+    Not a template any more. The site is deployed as static files, and a
+    server-rendered page would mean the version people play on is not the
+    version developed here - the one place a difference would be found is
+    production.
+    """
+    return send_from_directory(BASE_DIR, 'index.html')
 
 
 @app.route('/api/engine/status')
