@@ -7,7 +7,18 @@
   const animationToggle = document.getElementById('piece-animation-toggle');
   const animationOptions = [...document.querySelectorAll('input[name="piece-animation"]')];
   const movementSelect = document.getElementById('piece-movement-select');
+  const themeSelect = document.getElementById('theme-select');
   const animationOptionsWrap = document.getElementById('animation-options');
+
+  if (themeSelect && window.ChessTheme) {
+    themeSelect.value = window.ChessTheme.get();
+    themeSelect.addEventListener('change', () => {
+      window.ChessTheme.set(themeSelect.value);
+      // The board squares are painted per element by appearance.js, so they do
+      // not follow a stylesheet change on their own.
+      if (typeof window.paintBoardSquares === 'function') window.paintBoardSquares();
+    });
+  }
 
   const DEFAULTS = {
     pieceAnimationEnabled: true,

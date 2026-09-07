@@ -6,6 +6,8 @@
     <meta name="theme-color" content="#0c1420">
     <title>Schach</title>
     <link rel="stylesheet" href="static/style.css">
+    <!-- Before anything paints: a theme decided later flashes the wrong one. -->
+    <script src="static/theme.js"></script>
 </head>
 <body>
     <main class="app-shell">
@@ -81,23 +83,36 @@
                         <div class="review-summary" id="review-summary"></div>
                     </div>
 
-                    <div class="action-row">
-                        <button class="action-button secondary" id="undo-btn" type="button" disabled>↶ Zurück</button>
-                        <button class="action-button secondary" id="flip-btn" type="button" title="Brett drehen (F)">⇅ Drehen</button>
-                        <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
-                        <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
-                    </div>
-                    <div class="action-row">
-                        <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN</button>
-                        <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
-                        <button class="action-button secondary" id="resign-btn" type="button" title="Partie aufgeben">🏳 Aufgeben</button>
-                        <button class="action-button secondary" id="settings-btn" type="button">⚙ Einstellungen</button>
-                    </div>
+                    <nav class="action-groups" aria-label="Aktionen">
+                        <div class="action-group">
+                            <h3 class="action-group-label">Partie</h3>
+                            <div class="action-row">
+                                <button class="action-button secondary" id="undo-btn" type="button" disabled>↶ Zurück</button>
+                                <button class="action-button secondary" id="resign-btn" type="button" title="Partie aufgeben">🏳 Aufgeben</button>
+                            </div>
+                        </div>
 
-                    <div class="action-row">
-                        <button class="action-button secondary" id="appearance-btn" type="button">Aussehen</button>
-                        <button class="action-button primary" id="new-game-btn" type="button">Neue Partie</button>
-                    </div>
+                        <div class="action-group">
+                            <h3 class="action-group-label">Werkzeuge</h3>
+                            <div class="action-row">
+                                <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
+                                <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
+                                <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN &amp; FEN</button>
+                                <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
+                            </div>
+                        </div>
+
+                        <div class="action-group">
+                            <h3 class="action-group-label">Ansicht</h3>
+                            <div class="action-row">
+                                <button class="action-button secondary" id="flip-btn" type="button" title="Brett drehen (F)">⇅ Drehen</button>
+                                <button class="action-button secondary" id="appearance-btn" type="button">🎨 Aussehen</button>
+                                <button class="action-button secondary wide" id="settings-btn" type="button">⚙ Einstellungen</button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <button class="action-button primary new-game" id="new-game-btn" type="button">Neue Partie</button>
 
                     <div class="help-text">
                         <strong>Tipp:</strong> Rechtsklick zeichnet Pfeile und markiert Felder. Mit ← und → blätterst du durch die Partie.
@@ -308,6 +323,21 @@
                 <div class="settings-row">
                     <label for="sound-volume">Lautstärke</label>
                     <input id="sound-volume" class="settings-range" type="range" min="0" max="100" step="5">
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-block-heading">
+                    <h3>Erscheinungsbild</h3>
+                    <p>Helles oder dunkles Design. „Automatisch“ folgt der Einstellung deines Betriebssystems.</p>
+                </div>
+                <div class="settings-row">
+                    <label for="theme-select">Design</label>
+                    <select id="theme-select" class="settings-select">
+                        <option value="auto">Automatisch (System)</option>
+                        <option value="dark">Dunkel</option>
+                        <option value="light">Hell</option>
+                    </select>
                 </div>
             </div>
 

@@ -183,3 +183,51 @@ test('the project is licensed, and under the licence Stockfish forces', () => {
   assert.match(notes, /stockfish\.wasm/, 'the bundled engine must be declared');
   assert.match(notes, /nmrugg\/stockfish\.js/, 'with where it came from');
 });
+
+test('colours are tokens, so both themes can exist', () => {
+  // The stylesheet used 28 different alpha steps of plain white for what were
+  // really five kinds of surface. That is why the interface looked restless -
+  // and why a light theme was impossible: white-on-white lightens nothing.
+  const css = fs.readFileSync(path.join(root, 'static', 'style.css'), 'utf8');
+  const mediaAt = css.indexOf('prefers-color-scheme: light');
+  assert.ok(mediaAt > 0, 'the light palette must be defined');
+  // Everything past the closing brace of the media query, i.e. past both
+  // palettes - the palettes are the one place raw colours belong.
+  const body = css.slice(css.indexOf('\n}\n', css.indexOf('\n    }\n', mediaAt)));
+
+  // Things that deliberately do not follow the interface theme: the board
+  // carries its own square colours from the appearance picker, the filled half
+  // of the evaluation bar stands for White, and #fff on an accent-filled
+  // button is the label on top of it.
+  const ALLOWED = new Set(['#fff', '#f0d9b5', '#b58863', '#efd9b4', '#b07d4e', '#f4f6fb', '#d9dee9']);
+  const hex = [...body.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map(m => m[0]).filter(c => !ALLOWED.has(c));
+  assert.deepEqual(hex, [], `hardcoded colours left in the rules: ${hex.join(', ')}`);
+});
+
+test('an explicit theme choice beats the system, and auto defers to it', () => {
+  const theme = fs.readFileSync(path.join(root, 'static', 'theme.js'), 'utf8');
+  // "auto" must remove the attribute rather than write the resolved value,
+  // or the page stops following the system while it is open.
+  assert.match(theme, /delete document\.documentElement\.dataset\.theme/);
+  const css = fs.readFileSync(path.join(root, 'static', 'style.css'), 'utf8');
+  assert.match(css, /:root\[data-theme="light"\]/);
+  assert.match(css, /:root:not\(\[data-theme="dark"\]\)/);
+});
+
+test('the theme is decided before the page paints', () => {
+  // Deciding later means painting once in the wrong theme first - a white
+  // flash on a dark setup, which is the thing people actually notice.
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const themeAt = html.indexOf('theme.js');
+  const bodyAt = html.indexOf('<body');
+  assert.ok(themeAt > 0 && themeAt < bodyAt, 'theme.js must load in <head>, before <body>');
+});
+
+test('every panel button fits its label', () => {
+  // "Einstellungen" needs 111px and had 78px, so it spilled out of its own
+  // border. Two columns give 166px; a fourth column would take it back.
+  const css = fs.readFileSync(path.join(root, 'static', 'style.css'), 'utf8');
+  assert.match(css, /\.side-panel \.action-row \{[^}]*grid-template-columns: 1fr 1fr;/);
+  assert.equal(/\.action-row \{ grid-template-columns: 1fr 1fr 1fr/.test(css), false,
+    'a four-column rule would squeeze the labels again');
+});
