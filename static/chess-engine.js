@@ -243,6 +243,38 @@
   }
 
   /**
+   * Translates "king onto its own rook" into the square the king really goes.
+   *
+   * Castling is entered that way on most boards, and it is the gesture a lot
+   * of players have in their fingers: you grab the king and drop it on the
+   * rook. Written as e1-h1 it matches no legal move at all, so the board
+   * silently did nothing and the move looked broken - while e1-g1 worked, which
+   * is exactly the "first try failed, second try worked" pattern.
+   *
+   * This is an input convention, not a rule. It only ever *renames* the target
+   * square; whether the castling is actually allowed is still decided by the
+   * move generator afterwards.
+   *
+   * Returns the real destination, or null when the gesture is not this one.
+   */
+  function castlingTarget(state, from, to) {
+    const piece = state.board[from[0]]?.[from[1]];
+    if (!piece || typeOf(piece) !== 'k') return null;
+
+    const color = colorOf(piece);
+    const homeRow = color === 'white' ? 7 : 0;
+    if (from[0] !== homeRow || from[1] !== 4 || to[0] !== homeRow) return null;
+
+    const rook = color === 'white' ? 'R' : 'r';
+    if (state.board[homeRow][to[1]] !== rook) return null;
+
+    // The corner tells which side: h-file is short castling, a-file long.
+    if (to[1] === 7) return [homeRow, 6];
+    if (to[1] === 0) return [homeRow, 2];
+    return null;
+  }
+
+  /**
    * Squares a piece may be *pre*-moved to, before the opponent has replied.
    *
    * A premove cannot be checked for legality: the position it will be played
@@ -297,9 +329,17 @@
         if (dr || dc) offer(r + dr, c + dc);
       }
       // Castling is offered from the home square and sorted out on execution;
-      // the rights and the squares in between depend on the reply.
+      // the rights and the squares in between depend on the reply. The rook's
+      // own corner is offered too, because dropping the king on the rook is
+      // how a lot of players enter it.
       const homeRow = color === 'white' ? 7 : 0;
-      if (r === homeRow && c === 4) { offer(homeRow, 6); offer(homeRow, 2); }
+      if (r === homeRow && c === 4) {
+        offer(homeRow, 6); offer(homeRow, 2);
+        const rook = color === 'white' ? 'R' : 'r';
+        for (const corner of [0, 7]) {
+          if (state.board[homeRow][corner] === rook) targets.push([homeRow, corner]);
+        }
+      }
       return targets;
     }
 
@@ -447,7 +487,7 @@
 
   const api={
     FILES, PIECE_NAMES, createInitialState, cloneState, colorOf, typeOf, opponent, squareName, parseSquare,
-    isSquareAttacked, isInCheck, findKing, legalMoves, movesBetween, findLegalMove, applyMove, premoveTargets, fenKey, toFen, fromFen, status, sanForMove, insufficientMaterial
+    isSquareAttacked, isInCheck, findKing, legalMoves, movesBetween, findLegalMove, applyMove, premoveTargets, castlingTarget, fenKey, toFen, fromFen, status, sanForMove, insufficientMaterial
   };
   global.ChessEngine=api;
 // The engine is pure logic with no DOM access, so it must also load inside a

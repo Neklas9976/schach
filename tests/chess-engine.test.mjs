@@ -217,3 +217,46 @@ test('an ordinary move is exactly one move between its squares', () => {
   assert.equal(E.movesBetween(s, sq('e2'), sq('e4')).length, 1);
   assert.equal(E.movesBetween(s, sq('e2'), sq('e5')).length, 0);
 });
+
+/* ------------------------------------------------- castling gesture --- */
+
+test('dropping the king on its own rook means castling', () => {
+  // How castling is entered on most boards. Written as e1-h1 it matches no
+  // legal move at all, so the board silently did nothing - which is exactly
+  // the "first attempt did not work, second one did" report.
+  const s = E.fromFen('r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w KQkq - 0 1');
+  assert.deepEqual([...E.castlingTarget(s, sq('e1'), sq('h1'))], [...sq('g1')]);
+  assert.deepEqual([...E.castlingTarget(s, sq('e1'), sq('a1'))], [...sq('c1')]);
+});
+
+test('the gesture only renames the square, it never grants the move', () => {
+  // Rights already gone: the gesture still resolves, and the move generator
+  // is what refuses it. Legality must stay in one place.
+  const s = E.fromFen('r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w kq - 0 1');
+  const target = E.castlingTarget(s, sq('e1'), sq('h1'));
+  assert.deepEqual([...target], [...sq('g1')]);
+  assert.equal(E.movesBetween(s, sq('e1'), target).length, 0, 'without rights there is no move');
+});
+
+test('an ordinary king move is not mistaken for the gesture', () => {
+  const s = E.fromFen('r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w KQkq - 0 1');
+  assert.equal(E.castlingTarget(s, sq('e1'), sq('f1')), null);
+  assert.equal(E.castlingTarget(s, sq('e1'), sq('g1')), null, 'the real target is not a gesture');
+  // A rook that is not on its corner is not a castling partner either.
+  const moved = E.fromFen('r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/1R2K2R w Kkq - 0 1');
+  assert.equal(E.castlingTarget(moved, sq('e1'), sq('b1')), null);
+});
+
+test('a piece that is not a king is never a castling gesture', () => {
+  const s = E.fromFen('r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w KQkq - 0 1');
+  assert.equal(E.castlingTarget(s, sq('d2'), sq('h1')), null);
+});
+
+test('the rook corner is offered as a premove target too', () => {
+  // Otherwise the gesture works during your turn but not when queued, which
+  // is worse than not having it: the same drag would mean two different things.
+  const s = E.fromFen('r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w KQkq - 0 1');
+  const targets = names(E.premoveTargets(s, sq('e1')));
+  assert.ok(targets.includes('h1'), 'kingside corner');
+  assert.ok(targets.includes('a1'), 'queenside corner');
+});

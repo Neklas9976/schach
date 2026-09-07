@@ -488,16 +488,28 @@
     // leaves the selection empty, so the two never coexist.
     if(premove) premove=null;
     if(!selected){ if(p && ChessEngine.colorOf(p)===acting){selected=[r,c];} render(); return; }
-    if(p && ChessEngine.colorOf(p)===acting){selected=[r,c];render();return;}
+    // Clicking one of your own pieces normally just moves the selection - but
+    // the king onto its own rook is castling, and treating that as a
+    // re-selection is what made the click path refuse to castle at all.
+    const gesture=ChessEngine.castlingTarget(shownState(),selected,[r,c]);
+    if(!gesture && p && ChessEngine.colorOf(p)===acting){selected=[r,c];render();return;}
     tryMove(selected[0],selected[1],r,c,{dragged:false});
   }
 
   function tryMove(fr,fc,tr,tc,interaction={dragged:false}){
+    /* eslint-disable-next-line no-param-reassign -- the castling gesture below
+       renames the target square before anything else looks at it. */
     if (moveTransaction) return;
     const acting=inputColor();
     if(!acting) return;
     const piece=getPiece(fr,fc);
     if(!piece || ChessEngine.colorOf(piece)!==acting) return;
+
+    // Dropping the king on its own rook is how a lot of players castle; it
+    // names a square no legal move goes to, so without this the board just
+    // sat there and the move looked broken.
+    const castled=ChessEngine.castlingTarget(state,[fr,fc],[tr,tc]);
+    if(castled){ tr=castled[0]; tc=castled[1]; }
 
     // Not our turn: the move is queued instead of played.
     if(acting!==state.turn){ queuePremove([fr,fc],[tr,tc]); return; }
@@ -928,6 +940,8 @@
    * the premove actually runs.
    */
   function queuePremove(from,to){
+    const gesture=ChessEngine.castlingTarget(state,from,to);
+    if(gesture) to=gesture;
     const targets=ChessEngine.premoveTargets(state,from);
     const reachable=targets.some(t=>t[0]===to[0]&&t[1]===to[1]);
     selected=null;

@@ -160,3 +160,14 @@ test('archive rows are built with escaped text', () => {
   assert.match(code, /function escapeHtml\(text\)/);
   assert.match(code, /escapeHtml\(game\.opening\)/);
 });
+
+test('clicking the king onto its own rook castles instead of reselecting', () => {
+  // Both input paths have to honour the gesture. Drag goes straight to
+  // tryMove, but click-to-move sees a friendly piece on the target square and
+  // used to just move the selection there - so castling by clicking the rook
+  // did nothing at all, and only the e1-g1 click worked.
+  assert.match(code, /const gesture=ChessEngine\.castlingTarget\(shownState\(\),selected,\[r,c\]\);/);
+  assert.match(code, /if\(!gesture && p && ChessEngine\.colorOf\(p\)===acting\)\{selected=\[r,c\];render\(\);return;\}/);
+  // And the drag path still translates the square before resolving the move.
+  assert.match(code, /const castled=ChessEngine\.castlingTarget\(state,\[fr,fc\],\[tr,tc\]\);/);
+});
