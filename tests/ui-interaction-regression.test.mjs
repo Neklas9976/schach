@@ -42,9 +42,8 @@ test('a move animation always cleans up its floating piece', () => {
   // real piece. A timeout has to remove it the same way the move transaction
   // already has a timeout releasing the board.
   assert.match(code, /window\.setTimeout\(finish,longest\+\d+\);/);
-  // The net has to outlast the slowest leg, not the first one: castling starts
-  // the rook after the king.
-  assert.match(code, /longest=Math\.max\(longest,duration\+leg\.delay\)/);
+  // The net has to outlast the slowest leg, not the first one.
+  assert.match(code, /longest=Math\.max\(longest,duration\)/);
 });
 
 test('every piece a move involves is animated, not just the mover', () => {
@@ -178,4 +177,31 @@ test('clicking the king onto its own rook castles instead of reselecting', () =>
   assert.match(code, /if\(!gesture && p && ChessEngine\.colorOf\(p\)===acting\)\{selected=\[r,c\];render\(\);return;\}/);
   // And the drag path still translates the square before resolving the move.
   assert.match(code, /const castled=ChessEngine\.castlingTarget\(state,\[fr,fc\],\[tr,tc\]\);/);
+});
+
+test('every piece of a move is measured before any of them is inserted', () => {
+  // getBoundingClientRect forces the browser to recompute layout on the spot,
+  // including everything changed since. Measuring, inserting, measuring again
+  // triggers that on every pass. With a single moving piece it happens once
+  // and goes unnoticed; castling measured the rook after the king was already
+  // in the document, and that is where the first frames went missing - which
+  // is why castling, and only castling, looked like half the frame rate.
+  const start = code.indexOf('function animateMove(');
+  assert.ok(start >= 0, 'animateMove not found');
+  const body = code.slice(start, code.indexOf('function commitMove(', start));
+  const measured = body.indexOf('if(from&&to) legs.push(');
+  const inserted = body.indexOf('makeAnimator(leg.piece');
+  assert.ok(measured >= 0 && inserted >= 0, 'both phases must exist');
+  assert.ok(measured < inserted, 'a piece is inserted before the last one is measured');
+  // And no measuring left inside the building loop.
+  assert.equal(body.slice(inserted).includes('boardSquareCenter('), false,
+    'still measuring after inserting into the document');
+});
+
+test('castling moves both pieces at once, not one after the other', () => {
+  // A stagger was deliberate here once, but it read as a stutter rather than
+  // as a move - castling is one manoeuvre, not two in sequence.
+  assert.equal(/delay:\s*leg\.delay/.test(code), false);
+  assert.equal(/delay:\s*60/.test(code), false);
+  assert.equal(/const stagger=move\.isCastle/.test(code), false);
 });

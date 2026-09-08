@@ -577,3 +577,25 @@ test('each mode hides what does not belong to it', () => {
     assert.ok(css.includes(selector), `fehlt: ${selector}`);
   }
 });
+
+test('the three things you can play are their own section, not tools', () => {
+  // Zwischen "Brett drehen" und "Aussehen" verschwanden sie. Ueber dem Brett
+  // stehen sie da, wo die Entscheidung faellt.
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const bar = html.indexOf('class="mode-bar"');
+  const board = html.indexOf('id="chess-board"');
+  assert.ok(bar >= 0, 'keine Modusleiste');
+  assert.ok(bar < board, 'die Leiste steht nicht ueber dem Brett');
+  for (const mode of ['game', 'puzzle', 'online']) {
+    assert.ok(html.includes(`data-mode="${mode}"`), `kein Reiter fuer ${mode}`);
+  }
+  // Und aus den Werkzeugen sind sie verschwunden.
+  const tools = html.slice(html.indexOf('Werkzeuge'), html.indexOf('Ansicht'));
+  assert.equal(tools.includes('puzzle-btn'), false);
+  assert.equal(tools.includes('online-btn'), false);
+});
+
+test('leaving a running online game asks first', () => {
+  // Sonst sitzt der Gegner vor einem leeren Brett, und es zaehlt als Aufgabe.
+  assert.match(appOnline, /if\(!onlineMode\.finished&&!window\.confirm\(/);
+});

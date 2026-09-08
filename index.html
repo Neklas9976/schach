@@ -14,6 +14,21 @@
         <section class="game-card" aria-label="Schachspiel">
             <div class="game-layout">
                 <div class="board-area">
+                    <nav class="mode-bar" aria-label="Was gespielt wird">
+                        <button class="mode-tab" id="mode-game" type="button" data-mode="game">
+                            <span class="mode-tab-icon" aria-hidden="true">♟</span>
+                            <span class="mode-tab-text"><strong>Partie</strong><small>Gegen Computer oder zu zweit</small></span>
+                        </button>
+                        <button class="mode-tab" id="mode-puzzle" type="button" data-mode="puzzle">
+                            <span class="mode-tab-icon" aria-hidden="true">🧩</span>
+                            <span class="mode-tab-text"><strong>Taktik</strong><small>Aufgaben lösen</small></span>
+                        </button>
+                        <button class="mode-tab" id="mode-online" type="button" data-mode="online">
+                            <span class="mode-tab-icon" aria-hidden="true">🌐</span>
+                            <span class="mode-tab-text"><strong>Online</strong><small>Gegen andere Menschen</small></span>
+                        </button>
+                    </nav>
+
                     <div class="player-strip top-player">
                         <div class="player-avatar black-avatar" id="top-avatar">♚</div>
                         <div class="player-identity">
@@ -140,8 +155,6 @@
                             <div class="action-row">
                                 <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
                                 <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
-                                <button class="action-button secondary" id="puzzle-btn" type="button" title="Taktik-Training (T)">🧩 Puzzle</button>
-                                <button class="action-button secondary" id="online-btn" type="button" title="Online spielen (O)">🌐 Online</button>
                                 <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN &amp; FEN</button>
                                 <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
                             </div>

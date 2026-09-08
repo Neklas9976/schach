@@ -82,7 +82,40 @@
   function applyMode(){
     const mode=currentMode();
     if(document.body.dataset.mode!==mode) document.body.dataset.mode=mode;
+    for(const tab of document.querySelectorAll('.mode-tab')){
+      const active=tab.dataset.mode===mode;
+      tab.classList.toggle('active',active);
+      tab.setAttribute('aria-current',active?'true':'false');
+    }
   }
+
+  /**
+   * Der Wechsel ueber die Leiste ueber dem Brett.
+   *
+   * Zurueck zur Partie heisst: das Training beenden oder die Online-Partie
+   * verlassen - und das Zweite ist ein Aufgeben, weil der Gegner sonst vor
+   * einem leeren Brett sitzt. Deshalb wird gefragt.
+   */
+  function switchMode(target){
+    if(target===currentMode()&&target!=='game') return;
+    if(target==='game'){
+      if(onlineMode){
+        if(!onlineMode.finished&&!window.confirm('Die laufende Online-Partie gilt dann als aufgegeben. Wirklich verlassen?')) return;
+        leaveOnline();
+        return;
+      }
+      if(puzzleMode){ exitPuzzle(); return; }
+      newGame();
+      return;
+    }
+    if(target==='puzzle'){ openPuzzleDialog(); return; }
+    if(target==='online'){ openOnlineDialog(); }
+  }
+
+  document.querySelector('.mode-bar')?.addEventListener('click',event=>{
+    const tab=event.target.closest('.mode-tab');
+    if(tab) switchMode(tab.dataset.mode);
+  });
 
   /** Der laufende Trainingszustand, oder null ausserhalb des Trainings. */
   let puzzleMode=null;
@@ -667,24 +700,45 @@
 
     const base=settings.animation || {duration:280,easing:'cubic-bezier(0.4,0,0.2,1)'};
 
-    // The rook follows a beat after the king. Simultaneous reads as a glitch
-    // because the two cross paths; the small stagger makes it legible as one
-    // deliberate manoeuvre.
-    const travellers=[{piece,from:move.from,to:move.to,delay:0,dragged:true}];
+    // Koenig und Turm laufen zusammen los. Ein Versatz war hier einmal
+    // Absicht, las sich aber wie ein Ruckler statt wie ein Zug - eine Rochade
+    // ist eine Bewegung, keine zwei nacheinander.
+    const travellers=[{piece,from:move.from,to:move.to,dragged:true}];
     if(move.isCastle && move.rookFrom && move.rookTo){
       const rook=ChessEngine.colorOf(piece)==='white'?'R':'r';
-      travellers.push({piece:rook,from:move.rookFrom,to:move.rookTo,delay:60,dragged:false});
+      travellers.push({piece:rook,from:move.rookFrom,to:move.rookTo,dragged:false});
     }
+
+    /* Erst alles messen, dann alles bauen.
+     *
+     * getBoundingClientRect zwingt den Browser, den Seitenaufbau sofort neu zu
+     * rechnen - und zwar alles, was seither veraendert wurde. Wer misst,
+     * einfuegt, wieder misst und wieder einfuegt, loest das bei jedem Durchgang
+     * aus. Bei einem einzelnen Zug faellt das nicht auf, weil es nur einmal
+     * passiert. Bei der Rochade wurde der Turm vermessen, nachdem der Koenig
+     * schon im Dokument hing - genau dort fehlten die ersten Bilder, und genau
+     * deshalb sah nur die Rochade nach halber Bildrate aus. */
+    const legs=[];
+    for(const leg of travellers){
+      const from=boardSquareCenter(leg.from[0],leg.from[1]);
+      const to=boardSquareCenter(leg.to[0],leg.to[1]);
+      if(from&&to) legs.push({...leg,from,to});
+    }
+
+    // Das Feld der geschlagenen Figur gehoert in dieselbe Lesephase - sonst
+    // loest der Schatten denselben Zwischen-Umbruch aus wie zuvor der Turm,
+    // nur eben bei jedem Schlagzug.
+    const capturedPiece=move.captured;
+    const capturedSpot=capturedPiece
+      ? boardSquareCenter(...(move.isEnPassant?[move.from[0],move.to[1]]:[move.to[0],move.to[1]]))
+      : null;
 
     const animators=[];
     const animations=[];
     let longest=0;
 
-    for(const leg of travellers){
-      const from=boardSquareCenter(leg.from[0],leg.from[1]);
-      const to=boardSquareCenter(leg.to[0],leg.to[1]);
-      if(!from||!to) continue;
-
+    for(const leg of legs){
+      const {from,to}=leg;
       const size=Math.min(from.width,to.width)*pieceScale(leg.piece);
       // A drag already carried the piece to where the pointer let go; starting
       // from the square centre instead would snap it backwards first.
@@ -712,11 +766,11 @@
       const animator=makeAnimator(leg.piece,size,settings.pieceAnimation);
       animator.style.transform=startTransform;
       animators.push(animator);
-      longest=Math.max(longest,duration+leg.delay);
+      longest=Math.max(longest,duration);
 
       try{
         animations.push(animator.animate(keyframes,{
-          duration, delay:leg.delay, easing:base.easing, fill:'both'
+          duration, easing:base.easing, fill:'both'
         }));
       }catch{
         animator.style.transform=endTransform;
@@ -726,22 +780,17 @@
     // The piece being taken. It is already gone from the board by now, so this
     // is a copy that shrinks away on the square it stood on - without it a
     // capture is the one move where something simply blinks out of existence.
-    const captured=move.captured;
-    if(captured){
-      const square=move.isEnPassant?[move.from[0],move.to[1]]:[move.to[0],move.to[1]];
-      const spot=boardSquareCenter(square[0],square[1]);
-      if(spot){
-        const size=spot.width*pieceScale(captured);
-        const ghost=makeAnimator(captured,size,'captured');
-        const at=`translate3d(${spot.x-size/2}px,${spot.y-size/2}px,0)`;
-        ghost.style.transform=at;
-        animators.push(ghost);
-        try{
-          animations.push(ghost.animate(
-            [{transform:`${at} scale(1)`,opacity:1},{transform:`${at} scale(.55)`,opacity:0}],
-            {duration:Math.max(140,base.duration*0.8),easing:'cubic-bezier(.4,0,.6,1)',fill:'both'}));
-        }catch{ ghost.remove(); }
-      }
+    if(capturedPiece&&capturedSpot){
+      const size=capturedSpot.width*pieceScale(capturedPiece);
+      const ghost=makeAnimator(capturedPiece,size,'captured');
+      const at=`translate3d(${capturedSpot.x-size/2}px,${capturedSpot.y-size/2}px,0)`;
+      ghost.style.transform=at;
+      animators.push(ghost);
+      try{
+        animations.push(ghost.animate(
+          [{transform:`${at} scale(1)`,opacity:1},{transform:`${at} scale(.55)`,opacity:0}],
+          {duration:Math.max(140,base.duration*0.8),easing:'cubic-bezier(.4,0,.6,1)',fill:'both'}));
+      }catch{ ghost.remove(); }
     }
 
     if(!animators.length){ done(); return; }
@@ -848,8 +897,7 @@
     // Hard safety net: a visual animation can never lock gameplay forever,
     // even if a browser refuses to fire an animation completion callback. The
     // castling rook starts a beat late, so the net has to outlast that too.
-    const stagger=move.isCastle?60:0;
-    const duration=Math.max(120,(settings.animation?.duration||280)+stagger+180);
+    const duration=Math.max(120,(settings.animation?.duration||280)+180);
     window.setTimeout(finish,duration);
     window.setTimeout(afterMoveSettled,duration+20);
   }
