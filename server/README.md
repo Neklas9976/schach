@@ -90,7 +90,27 @@ die Maschine ebenfalls ein.
 | `ALLOWED_ORIGINS` | leer (alle) | Erlaubte Herkünfte, kommagetrennt |
 
 `ALLOWED_ORIGINS` gehört im Betrieb gesetzt. Ohne die Angabe kann jede fremde
-Seite Verbindungen zu deinem Server öffnen.
+Seite Verbindungen zu deinem Server öffnen. Zieht die Website um, muss der
+Wert mitziehen – am besten vorher beide Adressen eintragen, dann gibt es keine
+Lücke. (Der Schutz gilt Browsern: er hindert *andere Websites* daran, deinen
+Server über den Browser eines Besuchers zu benutzen. Ein Skript kann die
+Herkunft frei angeben – das liegt in der Natur der Sache und ist kein Mangel
+dieses Servers.)
+
+## Nachsehen, ob alles läuft
+
+```
+https://DEIN-SERVER.onrender.com/health
+```
+
+```json
+{"ok":true,"online":0,"waiting":0,"games":0,"store":"datenbank","accounts":2}
+```
+
+`store` ist der wichtige Teil: **`datenbank`** heißt, die Konten überleben das
+nächste Ausrollen, **`datei`** heißt, sie tun es nicht. Von außen war das
+vorher nicht zu erkennen – und das will man wissen, bevor die Wertungen weg
+sind, nicht danach.
 
 ## Konten
 
