@@ -84,7 +84,9 @@ die Maschine ebenfalls ein.
 | Umgebungsvariable | Vorgabe | Bedeutung |
 | --- | --- | --- |
 | `PORT` | `8787` | Port |
-| `DATA_FILE` | `server/data/players.json` | Wo die Konten liegen |
+| `DATABASE_URL` | leer | Postgres für die Konten; ohne das eine Datei |
+| `DATA_FILE` | `server/data/players.json` | Wo die Datei liegt |
+| `DATABASE_SSL_INSECURE` | leer | `1` schaltet die Zertifikatsprüfung ab |
 | `ALLOWED_ORIGINS` | leer (alle) | Erlaubte Herkünfte, kommagetrennt |
 
 `ALLOWED_ORIGINS` gehört im Betrieb gesetzt. Ohne die Angabe kann jede fremde
@@ -98,12 +100,40 @@ gelöscht), fängt mit einem neuen Konto an. Für eine Schachseite ist das der
 richtige Tausch: wo keine Anmeldedaten liegen, können auch keine gestohlen
 werden, und es gibt nichts zurückzusetzen.
 
-Die Konten stehen in einer JSON-Datei. Auf Render und Fly ist das Dateisystem
-flüchtig – die Datei überlebt eine neue Version **nicht**, wenn kein
-dauerhafter Datenträger eingebunden ist (Render: *Disk*, Fly: *Volume*, jeweils
-auf `server/data` gemountet). Ohne das beginnen nach jeder Aktualisierung alle
-wieder bei 1200. Für den Anfang mag das reichen; wer die Wertungen behalten
-will, hängt einen Datenträger an.
+### Wo sie liegen
+
+Ohne `DATABASE_URL` in einer JSON-Datei – richtig für den eigenen Rechner.
+
+Bei einem Hoster ist das Dateisystem **flüchtig**: jede neue Version des
+Servers startet mit leerer Platte, und alle Wertungen sind weg. Beim ersten
+Ausrollen ist genau das passiert. Deshalb gehört im Betrieb eine Datenbank
+dahinter:
+
+1. Bei [neon.com](https://neon.com) ein kostenloses Postgres anlegen
+   (Supabase oder jedes andere Postgres geht genauso).
+2. Die Verbindungszeichenfolge kopieren – sie beginnt mit `postgresql://`.
+3. Auf Render unter *Environment* eintragen: `DATABASE_URL` = diese Zeichenfolge.
+
+Mehr ist nicht zu tun: Tabelle und Index legt der Server beim Start selbst an,
+und was noch in `players.json` liegt, wandert beim ersten Start mit hinüber.
+
+`DATABASE_SSL_INSECURE=1` schaltet die Prüfung des Zertifikats ab. Das braucht
+man **nur** bei Anbietern mit selbst ausgestelltem Zertifikat – Renders interne
+Datenbank ist so einer. Neon, Supabase und die meisten anderen benutzen
+öffentlich beglaubigte Zertifikate; dort bleibt die Prüfung an, und das soll sie
+auch: ohne sie könnte sich jemand zwischen Server und Datenbank setzen.
+
+### Wie es gebaut ist
+
+Beim Start wird alles einmal in den Arbeitsspeicher geladen, jede Änderung
+danach in die Datenbank durchgeschrieben. Das ist Absicht: die Lobby fragt
+Konten *synchron* ab, mitten in der Bearbeitung einer Nachricht. Auf `await`
+umzustellen hieße, die halbe Anwendung anzufassen – für Daten, die selbst bei
+zehntausend Spielern nur wenige Megabyte sind.
+
+Die Folge, die man kennen muss: es darf genau **eine** Serverinstanz laufen.
+Zwei würden sich gegenseitig überschreiben. Der Gratis- wie der Starter-Tarif
+von Render betreiben ohnehin nur eine.
 
 ## Was der Server nicht tut
 
@@ -120,6 +150,7 @@ will, hängt einen Datenträger an.
 npm test
 ```
 
-47 Tests für die Logik und den vollständigen Ablauf (`tests/server.test.mjs`),
+50 Tests für die Logik und den vollständigen Ablauf (`tests/server.test.mjs`),
+zwölf für die Datenbankschicht gegen eine Attrappe (`tests/pg-store.test.mjs`),
 neun weitere starten einen echten Serverprozess und spielen mit zwei echten
 Verbindungen eine Partie (`tests/server-e2e.test.mjs`).

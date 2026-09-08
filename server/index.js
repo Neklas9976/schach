@@ -10,10 +10,12 @@
  *     node server/index.js
  * Umgebung:
  *     PORT            Port (Vorgabe 8787)
- *     DATA_FILE       Wo die Konten liegen (Vorgabe server/data/players.json)
+ *     DATABASE_URL    Postgres fuer die Konten; ohne das eine JSON-Datei
+ *     DATA_FILE       Wo die Datei liegt (Vorgabe server/data/players.json)
  *     ALLOWED_ORIGINS Kommaliste erlaubter Herkuenfte; leer heisst alle
  */
 
+import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,11 +23,13 @@ import { WebSocketServer } from 'ws';
 
 import { Lobby } from './lobby.js';
 import { FileStore } from './store.js';
+import { PostgresStore, connectPostgres } from './pg-store.js';
 import { TIME_CONTROLS } from './game.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
 const DATA_FILE = process.env.DATA_FILE || path.join(HERE, 'data', 'players.json');
+const DATABASE_URL = process.env.DATABASE_URL || '';
 const ALLOWED = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
@@ -39,8 +43,43 @@ const MAX_MESSAGE_BYTES = 4_096;
 /** playerId -> WebSocket */
 const sockets = new Map();
 
-const store = new FileStore(DATA_FILE);
+/**
+ * Wo die Konten liegen.
+ *
+ * Mit DATABASE_URL in einer Datenbank, sonst in einer Datei. Der Unterschied
+ * ist nicht Geschmack: bei Render und aehnlichen Anbietern ist das Dateisystem
+ * fluechtig, jede neue Version faengt mit leerer Platte an - und damit waeren
+ * alle Wertungen weg. Fuer den eigenen Rechner ist die Datei genau richtig.
+ */
+const store = await openStore();
 const lobby = new Lobby({ store, isPresent: id => sockets.has(id) });
+
+async function openStore() {
+  if (!DATABASE_URL) {
+    const file = new FileStore(DATA_FILE);
+    console.log(`Konten: ${DATA_FILE} (${file.all().length} vorhanden)`);
+    return file;
+  }
+  const pool = await connectPostgres(DATABASE_URL, {
+    insecure: process.env.DATABASE_SSL_INSECURE === '1'
+  });
+  const db = new PostgresStore(pool);
+  const count = await db.load();
+  console.log(`Konten: Datenbank (${count} vorhanden)`);
+
+  // Einmalig beim Umstieg: was noch in der Datei liegt, wandert mit. Wer
+  // schon gespielt hat, behaelt seine Wertung.
+  if (count === 0) {
+    try {
+      const carried = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+      const added = await db.importAll(carried);
+      if (added) console.log(`${added} Konten aus ${DATA_FILE} uebernommen`);
+    } catch {
+      /* keine Datei da - der Normalfall */
+    }
+  }
+  return db;
+}
 /** playerId -> Zeitgeber, der die Partie nach zu langer Abwesenheit beendet */
 const abandonTimers = new Map();
 
@@ -329,21 +368,25 @@ const heartbeat = setInterval(() => {
 }, 30_000);
 if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
-function shutdown() {
+async function shutdown() {
   console.log('Server wird beendet, Konten werden gesichert …');
   clearInterval(tick);
   clearInterval(heartbeat);
-  store.close();
   wss.close();
-  server.close(() => process.exit(0));
-  // Falls eine Verbindung nicht loslaesst.
-  setTimeout(() => process.exit(0), 3_000).unref();
+  server.close();
+  // Erst schreiben, dann gehen: ein Neustart mitten im Sammelfenster wuerde
+  // sonst die letzten Wertungen verlieren.
+  try { await store.close(); } catch (error) { console.error(error.message); }
+  process.exit(0);
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+// Falls das Schreiben haengt, trotzdem gehen - der Hoster wartet nicht ewig.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => setTimeout(() => process.exit(0), 8_000).unref());
+}
 
 server.listen(PORT, () => {
   console.log(`Schachserver auf Port ${PORT}`);
-  console.log(`Konten: ${DATA_FILE} (${store.all().length} vorhanden)`);
   console.log(ALLOWED.length ? `Erlaubte Herkunft: ${ALLOWED.join(', ')}` : 'Alle Herkuenfte erlaubt');
 });
