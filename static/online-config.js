@@ -13,4 +13,4 @@
  * Muss mit wss:// beginnen, nicht ws:// - eine mit https ausgelieferte Seite
  * darf keine unverschluesselte Verbindung oeffnen, der Browser verbietet es.
  */
-window.CHESS_SERVER_URL = '';
+window.CHESS_SERVER_URL = 'wss://chessworld-p2ke.onrender.com';
