@@ -21,20 +21,27 @@
 
 import { MemoryStore } from './store.js';
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS players (
-  id         text PRIMARY KEY,
-  token      text UNIQUE NOT NULL,
-  name       text NOT NULL,
-  rating     integer NOT NULL DEFAULT 1200,
-  games      integer NOT NULL DEFAULT 0,
-  wins       integer NOT NULL DEFAULT 0,
-  losses     integer NOT NULL DEFAULT 0,
-  draws      integer NOT NULL DEFAULT 0,
-  created_at bigint  NOT NULL
-);
-CREATE INDEX IF NOT EXISTS players_rating_idx ON players (rating DESC);
-`;
+/**
+ * Einzeln, nicht als ein Block mit Semikolons.
+ *
+ * Mehrere Anweisungen in einem Aufruf gehen nur ueber das einfache
+ * Abfrageprotokoll. Verbindungsvermittler wie der von Neon lehnen das ab -
+ * und dann startet der Server gar nicht erst.
+ */
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS players (
+     id         text PRIMARY KEY,
+     token      text UNIQUE NOT NULL,
+     name       text NOT NULL,
+     rating     integer NOT NULL DEFAULT 1200,
+     games      integer NOT NULL DEFAULT 0,
+     wins       integer NOT NULL DEFAULT 0,
+     losses     integer NOT NULL DEFAULT 0,
+     draws      integer NOT NULL DEFAULT 0,
+     created_at bigint  NOT NULL
+   )`,
+  'CREATE INDEX IF NOT EXISTS players_rating_idx ON players (rating DESC)'
+];
 
 const UPSERT = `
 INSERT INTO players (id, token, name, rating, games, wins, losses, draws, created_at)
@@ -64,7 +71,7 @@ export class PostgresStore extends MemoryStore {
 
   /** Schema anlegen und alles laden. Muss vor dem ersten Zugriff fertig sein. */
   async load() {
-    await this.client.query(SCHEMA);
+    for (const statement of SCHEMA) await this.client.query(statement);
     const result = await this.client.query(
       'SELECT id, token, name, rating, games, wins, losses, draws, created_at FROM players'
     );

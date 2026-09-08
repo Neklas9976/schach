@@ -152,5 +152,12 @@ npm test
 
 50 Tests für die Logik und den vollständigen Ablauf (`tests/server.test.mjs`),
 zwölf für die Datenbankschicht gegen eine Attrappe (`tests/pg-store.test.mjs`),
-neun weitere starten einen echten Serverprozess und spielen mit zwei echten
-Verbindungen eine Partie (`tests/server-e2e.test.mjs`).
+acht weitere gegen ein **echtes** Postgres (`tests/pg-store-real.test.mjs`,
+über PGlite – Postgres als WebAssembly, ohne Docker), und neun, die einen
+echten Serverprozess starten und mit zwei echten Verbindungen eine Partie
+spielen (`tests/server-e2e.test.mjs`).
+
+Der Test gegen das echte Postgres hat sich sofort bezahlt gemacht: das Schema
+stand als ein Block mit zwei Anweisungen darin. `node-postgres` schluckt das,
+Verbindungsvermittler wie der von Neon nicht – der Server wäre dort gar nicht
+erst angelaufen.
