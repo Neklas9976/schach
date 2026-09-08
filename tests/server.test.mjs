@@ -531,3 +531,10 @@ test('the status page says where the accounts actually live', () => {
   const serverCode = fs.readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
   assert.match(serverCode, /store: store instanceof PostgresStore \? 'datenbank' : 'datei'/);
 });
+
+test('the opponent’s name stays in the player strip', () => {
+  // renderCaptured laeuft bei jedem Neuzeichnen und setzte die Leisten
+  // bedingungslos auf "Weiß" und "Schwarz" zurueck. Online sass man damit nach
+  // dem ersten Zug wieder namenlos da.
+  assert.match(appOnline, /if\(onlineMode&&window\.ChessOnline\?\.game\(\)\)\{\s*setOnlinePlayers\(window\.ChessOnline\.game\(\)\);/);
+});

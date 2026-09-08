@@ -1168,8 +1168,15 @@
     // missing ones.
     bottomCaptured.innerHTML=capturedHtml(missing[topColor],bottomColor==='white'?balance:-balance);
     topCaptured.innerHTML=capturedHtml(missing[bottomColor],topColor==='white'?balance:-balance);
-    bottomName.textContent=bottomColor==='white'?'Weiß':'Schwarz';
-    topName.textContent=topColor==='white'?'Weiß':'Schwarz';
+    // Online tragen die Leisten die Namen der beiden Spieler. renderCaptured
+    // laeuft bei jedem Neuzeichnen und hat sie bisher wieder durch "Weiß" und
+    // "Schwarz" ersetzt - nach dem ersten Zug sass man wieder namenlos da.
+    if(onlineMode&&window.ChessOnline?.game()){
+      setOnlinePlayers(window.ChessOnline.game());
+    } else {
+      bottomName.textContent=bottomColor==='white'?'Weiß':'Schwarz';
+      topName.textContent=topColor==='white'?'Weiß':'Schwarz';
+    }
     bottomAvatar.textContent=bottomColor==='white'?'♔':'♚';
     topAvatar.textContent=topColor==='white'?'♔':'♚';
   }
