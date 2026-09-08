@@ -39,6 +39,8 @@ const RECONNECT_GRACE_MS = 60_000;
 const TICK_MS = 250;
 /** Grenze fuer eine einzelne Nachricht - ein Zug ist ein paar Byte gross. */
 const MAX_MESSAGE_BYTES = 4_096;
+/** Seit wann dieser Prozess laeuft. Macht einen Neustart von aussen sichtbar. */
+const STARTED_AT = Date.now();
 
 /** playerId -> WebSocket */
 const sockets = new Map();
@@ -289,7 +291,11 @@ const server = http.createServer((request, response) => {
       // und ob eine Datenbank wirklich dahintersteht oder die Wertungen beim
       // naechsten Ausrollen verschwinden, will man wissen, bevor es passiert.
       store: store instanceof PostgresStore ? 'datenbank' : 'datei',
-      accounts: store.all().length
+      accounts: store.all().length,
+      // Ohne diese Zahl laesst sich von aussen nicht unterscheiden, ob eine
+      // neue Version wirklich laeuft oder die alte weiterlebt - und damit
+      // auch nicht pruefen, ob die Konten einen Neustart ueberstanden haben.
+      uptimeSeconds: Math.round((Date.now() - STARTED_AT) / 1000)
     }));
     return;
   }
