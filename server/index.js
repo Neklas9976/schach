@@ -36,11 +36,11 @@ const TICK_MS = 250;
 /** Grenze fuer eine einzelne Nachricht - ein Zug ist ein paar Byte gross. */
 const MAX_MESSAGE_BYTES = 4_096;
 
-const store = new FileStore(DATA_FILE);
-const lobby = new Lobby({ store });
-
 /** playerId -> WebSocket */
 const sockets = new Map();
+
+const store = new FileStore(DATA_FILE);
+const lobby = new Lobby({ store, isPresent: id => sockets.has(id) });
 /** playerId -> Zeitgeber, der die Partie nach zu langer Abwesenheit beendet */
 const abandonTimers = new Map();
 

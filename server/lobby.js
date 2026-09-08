@@ -73,10 +73,14 @@ export class Lobby {
    * @param {object} options
    * @param {object} options.store  Spielerkonten, siehe store.js
    * @param {() => number} [options.now]
+   * @param {(playerId: string) => boolean} [options.isPresent]
    */
-  constructor({ store, now = Date.now } = {}) {
+  constructor({ store, now = Date.now, isPresent = () => true } = {}) {
     this.store = store;
     this.now = now;
+    // Ob ein Spieler ueberhaupt noch erreichbar ist. Die Lobby weiss nichts
+    // von Verbindungen - index.js reicht die Auskunft herein.
+    this.isPresent = isPresent;
     /** controlId -> [{playerId, since}] */
     this.queues = new Map();
     /** gameId -> Game */
@@ -144,6 +148,14 @@ export class Lobby {
   }
 
   findPartner(queue, me, now) {
+    // Wer nicht mehr da ist, wird zuerst aus der Schlange geworfen. Eine
+    // abgerissene Verbindung faellt dem Server erst beim naechsten Herzschlag
+    // auf - bis dahin wuerde man gegen einen Geist gepaart, der nie zieht, und
+    // haette einen geschenkten Sieg nach Ablauf der Wartefrist.
+    for (let i = queue.length - 1; i >= 0; i--) {
+      if (!this.isPresent(queue[i].playerId)) queue.splice(i, 1);
+    }
+
     let best = null;
     let bestGap = Infinity;
     for (const entry of queue) {

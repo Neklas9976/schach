@@ -491,3 +491,35 @@ test('a site without a server says so instead of pretending to connect', () => {
   assert.match(appOnline, /onlineSeekBtn\.disabled=status!=='ready';/);
   assert.match(appOnline, /status==='unconfigured'/);
 });
+
+test('nobody is paired with a player whose connection is already gone', () => {
+  // Eine abgerissene Verbindung faellt dem Server erst beim naechsten
+  // Herzschlag auf. Bis dahin wurde man gegen einen Geist gepaart, der nie
+  // zieht - und bekam nach Ablauf der Wartefrist einen geschenkten Sieg.
+  // Genau das ist beim ersten Spielen gegen den veroeffentlichten Server
+  // passiert.
+  const store = new MemoryStore();
+  const present = new Set();
+  const lobby = new Lobby({ store, now: () => 1_000, isPresent: id => present.has(id) });
+
+  const ghost = lobby.authenticate(null, 'Geist');
+  const alive = lobby.authenticate(null, 'Lebendig');
+  present.add(ghost.id);
+  lobby.seek(ghost.id, '5+0');
+  assert.equal(lobby.queueSize(), 1);
+
+  // Der Geist verschwindet, ohne dass der Server es schon weiss.
+  present.delete(ghost.id);
+  present.add(alive.id);
+  const result = lobby.seek(alive.id, '5+0');
+  assert.equal(result.game, undefined, 'gegen einen Geist gepaart');
+  // Und der Geist ist dabei gleich aus der Schlange geflogen.
+  assert.equal(lobby.queueSize(), 1);
+});
+
+test('the presence check is wired to the actual sockets', () => {
+  const serverCode = fs.readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+  assert.match(serverCode, /new Lobby\(\{ store, isPresent: id => sockets\.has\(id\) \}\)/);
+  // sockets muss vor der Lobby stehen, sonst greift die Auskunft ins Leere.
+  assert.ok(serverCode.indexOf('const sockets = new Map();') < serverCode.indexOf('new Lobby({'));
+});
