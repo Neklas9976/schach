@@ -127,7 +127,7 @@
                     </div>
 
                     <nav class="action-groups" aria-label="Aktionen">
-                        <div class="action-group">
+                        <div class="action-group" id="group-partie">
                             <h3 class="action-group-label">Partie</h3>
                             <div class="action-row">
                                 <button class="action-button secondary" id="undo-btn" type="button" disabled>↶ Zurück</button>
@@ -135,7 +135,7 @@
                             </div>
                         </div>
 
-                        <div class="action-group">
+                        <div class="action-group" id="group-werkzeuge">
                             <h3 class="action-group-label">Werkzeuge</h3>
                             <div class="action-row">
                                 <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
@@ -161,6 +161,12 @@
 
                     <div class="help-text">
                         <strong>Tipp:</strong> Rechtsklick zeichnet Pfeile und markiert Felder. Mit ← und → blätterst du durch die Partie.
+                    </div>
+                    <div class="help-text mode-help for-puzzle">
+                        <strong>Taktik:</strong> Ein falscher Zug wird zurückgenommen – versuch es ruhig noch einmal. Erst <em>Lösung</em> wertet die Aufgabe als verfehlt.
+                    </div>
+                    <div class="help-text mode-help for-online">
+                        <strong>Online:</strong> Hinweis, Analyse und Bewertungsbalken sind abgeschaltet – gegenüber sitzt ein Mensch. Ein Neuladen schadet nichts, die Partie kommt zurück.
                     </div>
                 </aside>
             </div>

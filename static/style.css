@@ -1312,16 +1312,7 @@ html.ai-thinking.premove-possible .square { cursor: default; }
 .puzzle-actions { grid-template-columns: 1fr 1fr; }
 .puzzle-card .action-button.puzzle-exit { margin-top: 2px; }
 
-/* Waehrend des Trainings ist die Partie pausiert: Knoepfe, die sie
-   veraendern wuerden, gehoeren dann nicht auf den Schirm. */
-body.puzzle-active .status-card,
-body.puzzle-active .opening-name,
-body.puzzle-active .review-card,
-body.puzzle-active .action-groups .action-group:first-child,
-body.puzzle-active #review-btn,
-body.puzzle-active #new-game-btn { display: none; }
 
-body.puzzle-active .help-text::before { content: 'Taktik: '; font-weight: 800; color: var(--ink-2); }
 
 /* --- Trainingsfenster --------------------------------------------------- */
 
@@ -1411,14 +1402,7 @@ body.puzzle-active .help-text::before { content: 'Taktik: '; font-weight: 800; c
 
 .online-actions { grid-template-columns: 1fr 1fr; }
 
-/* Waehrend einer Online-Partie sind die lokalen Partieknoepfe sinnlos oder
-   schaedlich: zuruecknehmen gibt es nicht, und der Hinweis waere Motorhilfe. */
-body.online-active .status-card,
-body.online-active .review-card,
-body.online-active .action-groups .action-group:first-child,
-body.online-active #hint-btn,
-body.online-active #review-btn,
-body.online-active #new-game-btn { display: none; }
+
 
 /* --- Das Fenster -------------------------------------------------------- */
 
@@ -1500,3 +1484,58 @@ body.online-active #new-game-btn { display: none; }
 .online-advanced > summary::before { content: '▸ '; }
 .online-advanced[open] > summary::before { content: '▾ '; }
 .online-advanced > summary::-webkit-details-marker { display: none; }
+
+/* ===================================================================== *
+ * Was in welchem Modus rechts steht
+ * ===================================================================== *
+ *
+ * Ein Attribut mit drei Werten, nicht zwei unabhaengige Klassen: die konnten
+ * beide zugleich gelten, und dann lagen Partie, Training und Online-Karte
+ * untereinander - mit den Knoepfen aller drei.
+ *
+ * Die Regel dahinter: sichtbar ist, was im aktuellen Modus etwas bewirkt.
+ * Alles andere ist entweder wirkungslos (eine Partie zuruecknehmen, die auf
+ * einem Server laeuft) oder schaedlich (der beste Zug, waehrend gegenueber
+ * ein Mensch sitzt).
+ */
+
+/* Jeder Modus hat seine Farbe. Am Rand der Karte sieht man ohne Lesen, wo
+   man ist. */
+body { --mode-accent: var(--accent-line); }
+body[data-mode="puzzle"] { --mode-accent: var(--tone-great); }
+body[data-mode="online"] { --mode-accent: var(--tone-brilliant); }
+
+.puzzle-card, .online-card { border-left-color: var(--mode-accent); }
+.puzzle-card .status-kicker, .online-card .status-kicker { color: var(--mode-accent); }
+
+/* --- Training ----------------------------------------------------------- */
+body[data-mode="puzzle"] .status-card,
+body[data-mode="puzzle"] .opening-name,
+body[data-mode="puzzle"] .review-card,
+body[data-mode="puzzle"] #group-partie,
+body[data-mode="puzzle"] #hint-btn,
+body[data-mode="puzzle"] #review-btn,
+body[data-mode="puzzle"] #puzzle-btn,
+body[data-mode="puzzle"] #new-game-btn { display: none; }
+
+/* --- Online ------------------------------------------------------------- */
+body[data-mode="online"] .status-card,
+body[data-mode="online"] .opening-name,
+body[data-mode="online"] .review-card,
+body[data-mode="online"] #group-partie,
+body[data-mode="online"] #hint-btn,
+body[data-mode="online"] #review-btn,
+body[data-mode="online"] #online-btn,
+body[data-mode="online"] #new-game-btn { display: none; }
+
+/* --- Partie ------------------------------------------------------------- */
+body[data-mode="game"] .puzzle-card,
+body[data-mode="game"] .online-card { display: none; }
+
+/* Der Tipp unten sagt, was im jeweiligen Modus gilt. */
+body[data-mode="puzzle"] .help-text,
+body[data-mode="online"] .help-text { display: none; }
+
+.mode-help { display: none; }
+body[data-mode="puzzle"] .mode-help.for-puzzle,
+body[data-mode="online"] .mode-help.for-online { display: block; }

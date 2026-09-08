@@ -538,3 +538,42 @@ test('the opponent’s name stays in the player strip', () => {
   // dem ersten Zug wieder namenlos da.
   assert.match(appOnline, /if\(onlineMode&&window\.ChessOnline\?\.game\(\)\)\{\s*setOnlinePlayers\(window\.ChessOnline\.game\(\)\);/);
 });
+
+test('there is one mode, not two flags that can both be on', () => {
+  // Zwei unabhaengige Klassen am body konnten beide zugleich gelten: wer aus
+  // einer Online-Partie heraus das Training oeffnete, hatte danach beide
+  // Karten untereinander und die Knoepfe beider Modi.
+  assert.match(appOnline, /function currentMode\(\)\{\s*if\(onlineMode\) return 'online';\s*if\(puzzleMode\) return 'puzzle';\s*return 'game';/);
+  assert.match(appOnline, /document\.body\.dataset\.mode=mode;/);
+  assert.equal(/classList\.(add|remove)\('(puzzle|online)-active'\)/.test(appOnline), false,
+    'die alten Modusklassen sind noch im Spiel');
+});
+
+test('starting an online game closes training without touching the board', () => {
+  // Frueher lief hier exitPuzzle(), und das rief newGame() - welches den
+  // gerade gesetzten Online-Modus gleich wieder loeschte.
+  assert.match(appOnline, /const fromPuzzle=closePuzzleMode\(\);/);
+  assert.match(appOnline, /function closePuzzleMode\(\)\{\s*if\(!puzzleMode\) return undefined;/);
+  // Und die aufgehobene Partie wandert weiter, statt verloren zu gehen.
+  assert.match(appOnline, /fromPuzzle!==undefined\?fromPuzzle/);
+});
+
+test('training cannot start while an online game is running', () => {
+  // Beide brauchen dasselbe Brett, und die Partie laeuft auf der Uhr.
+  assert.match(appOnline, /const blockiert=!!onlineMode&&!onlineMode\.finished;/);
+  assert.match(appOnline, /getElementById\('puzzle-start'\)\.disabled=blockiert;/);
+});
+
+test('each mode hides what does not belong to it', () => {
+  const css = fs.readFileSync(new URL('../static/style.css', import.meta.url), 'utf8');
+  for (const selector of [
+    'body[data-mode="online"] #hint-btn',
+    'body[data-mode="online"] #review-btn',
+    'body[data-mode="online"] #group-partie',
+    'body[data-mode="puzzle"] #group-partie',
+    'body[data-mode="game"] .puzzle-card',
+    'body[data-mode="game"] .online-card'
+  ]) {
+    assert.ok(css.includes(selector), `fehlt: ${selector}`);
+  }
+});

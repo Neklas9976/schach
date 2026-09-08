@@ -65,6 +65,25 @@
   /** Die laufende Online-Partie, oder null. */
   let onlineMode=null;
 
+  /**
+   * Was gerade gespielt wird: 'game', 'puzzle' oder 'online'.
+   *
+   * Frueher waren das zwei unabhaengige Klassen am body, und die konnten
+   * beide zugleich gelten - wer aus einer Online-Partie heraus das Training
+   * oeffnete, hatte danach beide Karten untereinander und die Knoepfe beider
+   * Modi. Ein Zustand mit drei Werten kann das nicht.
+   */
+  function currentMode(){
+    if(onlineMode) return 'online';
+    if(puzzleMode) return 'puzzle';
+    return 'game';
+  }
+
+  function applyMode(){
+    const mode=currentMode();
+    if(document.body.dataset.mode!==mode) document.body.dataset.mode=mode;
+  }
+
   /** Der laufende Trainingszustand, oder null ausserhalb des Trainings. */
   let puzzleMode=null;
   /** Vom Anwender im Trainingsfenster gewaehltes Thema. */
@@ -886,6 +905,7 @@
   }
 
   function updateStatus(st,vs){
+    applyMode();
     paintPuzzleCard();
     paintOnlineCard();
     statusCard.classList.remove('check-state','game-over');
@@ -1359,15 +1379,14 @@
     if(moveTransaction)return;
     if(onlineMode){
       onlineMode=null;
-      document.body.classList.remove('online-active');
       if(onlineCard) onlineCard.hidden=true;
       window.ChessClock?.useExternalClock?.(null);
     }
     if(puzzleMode){
       puzzleMode=null;
-      document.body.classList.remove('puzzle-active');
       if(puzzleCard) puzzleCard.hidden=true;
     }
+    applyMode();
     aiGeneration++;
     setThinking(false);
     state=ChessEngine.createInitialState();history=[];movesLog=[];selected=null;
@@ -2420,7 +2439,6 @@
       ratingBefore:window.ChessPuzzles.readProgress().rating,
       ratingAfter:null
     };
-    document.body.classList.add('puzzle-active');
     setFlipped(position.turn==='black');
     window.ChessClock?.stop?.();
 
@@ -2441,12 +2459,26 @@
     paintPuzzleCard();
   }
 
-  function exitPuzzle(){
-    if(!puzzleMode) return;
+  /**
+   * Beendet das Training, ohne das Brett anzufassen.
+   *
+   * Getrennt von exitPuzzle, weil es zwei Anlaesse gibt: der Spieler hoert auf
+   * (dann soll seine Partie zurueckkommen), oder eine Online-Partie beginnt
+   * (dann uebernimmt die das Brett, und die gesicherte Partie wandert weiter).
+   * Gibt zurueck, was aufgehoben war - undefined, wenn gar kein Training lief.
+   */
+  function closePuzzleMode(){
+    if(!puzzleMode) return undefined;
     const saved=puzzleMode.savedGame;
     puzzleMode=null;
-    document.body.classList.remove('puzzle-active');
     if(puzzleCard) puzzleCard.hidden=true;
+    applyMode();
+    return saved;
+  }
+
+  function exitPuzzle(){
+    const saved=closePuzzleMode();
+    if(saved===undefined) return;
     if(saved) restoreGame(saved);
     else newGame();
   }
@@ -2681,7 +2713,13 @@
     try{
       await window.ChessPuzzles.load();
       const count=window.ChessPuzzles.all().length;
-      puzzleModalHint.textContent=`${count} Aufgaben, alle selbst erzeugt und von Stockfish geprüft.`;
+      // Waehrend einer laufenden Online-Partie kann kein Training beginnen:
+      // beide brauchen dasselbe Brett, und die Partie laeuft auf der Uhr.
+      const blockiert=!!onlineMode&&!onlineMode.finished;
+      document.getElementById('puzzle-start').disabled=blockiert;
+      puzzleModalHint.textContent=blockiert
+        ? 'Deine Online-Partie läuft noch – beende sie zuerst.'
+        : `${count} Aufgaben, alle selbst erzeugt und von Stockfish geprüft.`;
       paintPuzzleStats();
       paintPuzzleThemes();
     }catch(error){
@@ -2754,8 +2792,13 @@
   function enterOnlineGame(game, resumed){
     const colour=window.ChessOnline.myColour();
     if(!colour) return;
+    // Ein laufendes Training wird zuerst beendet - und zwar ohne das Brett
+    // anzufassen. Frueher lief hier exitPuzzle(), und das rief newGame(),
+    // welches den gerade gesetzten Online-Modus gleich wieder loeschte.
+    const fromPuzzle=closePuzzleMode();
     const carried=onlineMode?onlineMode.savedGame
-      :((movesLog.length&&!gameEnded)?captureGame():null);
+      :(fromPuzzle!==undefined?fromPuzzle
+        :((movesLog.length&&!gameEnded)?captureGame():null));
 
     onlineMode={
       savedGame:carried,
@@ -2769,9 +2812,7 @@
       opponentGone:false,
       finished:game.status==='finished'
     };
-    document.body.classList.add('online-active');
-    if(puzzleMode) exitPuzzle();
-
+    applyMode();
     setFlipped(colour==='black');
     window.ChessClock?.useExternalClock?.(onlineClockSource);
     applyServerGame(game);
@@ -2784,8 +2825,8 @@
     const saved=onlineMode.savedGame;
     const running=!onlineMode.finished;
     onlineMode=null;
-    document.body.classList.remove('online-active');
     if(onlineCard) onlineCard.hidden=true;
+    applyMode();
     window.ChessClock?.useExternalClock?.(null);
     // Eine laufende Partie einfach zu verlassen waere ein Aufgeben ohne es zu
     // sagen; der Server wertet sie nach kurzer Wartezeit ohnehin so.
