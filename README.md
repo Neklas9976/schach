@@ -242,18 +242,15 @@ GitHub Pages Dateien und Ordner mit führendem Unterstrich stillschweigend weg �
 für eine reine Dateiablage ist die Verarbeitung überflüssig und nur eine
 Fehlerquelle.
 
-### Ein eigener Name statt neklas9976.github.io
+### Der Name der Seite
 
-Drei Wege, vom kostenlosen zum schönsten.
+Sie liegt unter **<https://chessw0rld.github.io/>** – ohne Benutzernamen und
+ohne Unterordner, weil das Repository einer GitHub-Organisation gleichen Namens
+gehört und selbst `chessw0rld.github.io` heißt. Das kostet nichts.
 
-**1. Kostenlos: eine GitHub-Organisation mit gutem Namen.**
-Eine Organisation anlegen (github.com/organizations/plan → *Free*), sie z. B.
-`schachplatz` nennen, das Repository dorthin verschieben (Repo → Settings →
-*Transfer ownership*) und in `schachplatz.github.io` umbenennen. Die Seite liegt
-dann unter `https://schachplatz.github.io/` – ohne Benutzernamen und ohne
-Unterordner. Kostet nichts, dauert fünf Minuten.
+Wer stattdessen eine echte Domain will:
 
-**2. Eine echte Domain (rund 10–15 € im Jahr).**
+**Eine eigene Domain (rund 10–15 € im Jahr).**
 `.de` ist am günstigsten, `.com` etwas teurer, `.chess` gibt es nicht. Kaufen
 lässt sie sich bei jedem Registrar (INWX, Namecheap, Cloudflare Registrar –
 letzterer verkauft zum Einkaufspreis ohne Aufschlag). Eine Domain muss der
@@ -281,21 +278,24 @@ verliert die Seite die Domain beim nächsten Push.
 185.199.111.153
 ```
 
-und für `www` einen CNAME-Eintrag auf `neklas9976.github.io`. Wer stattdessen
+und für `www` einen CNAME-Eintrag auf `chessw0rld.github.io`. Wer stattdessen
 nur `schach.meinedomain.de` will, braucht ausschließlich diesen einen
 CNAME-Eintrag und keine A-Einträge.
 
 Nach der DNS-Umstellung (Minuten bis wenige Stunden) in Settings → Pages
 **Enforce HTTPS** einschalten. Das Zertifikat stellt GitHub kostenlos aus.
 
-**3. Netlify oder Cloudflare Pages** nehmen die Domain im eigenen Dashboard
+**Netlify oder Cloudflare Pages** nehmen die Domain im eigenen Dashboard
 entgegen und stellen das Zertifikat ebenfalls kostenlos aus – wer ohnehin dort
 veröffentlicht, spart sich die A-Einträge.
 
-Am Programm ändert sich in allen drei Fällen **nichts**: alle Pfade sind
-dokumentrelativ, die Seite läuft unter `/`, unter `/schach/` und unter jeder
-Domain gleich. Der Test *no runtime path starts at the domain root* hält das
-fest.
+Am Programm ändert sich dabei **nichts**: alle Pfade sind dokumentrelativ, die
+Seite läuft unter `/`, unter einem Unterordner und unter jeder Domain gleich.
+Der Test *no runtime path starts at the domain root* hält das fest.
+
+Was **mitziehen muss**, ist `ALLOWED_ORIGINS` auf dem Spielserver – der kennt
+die Seite an ihrer Adresse und weist alles andere ab. Am besten die neue
+Adresse eintragen, *bevor* umgezogen wird; dann gibt es keine Lücke.
 
 ### Netlify, Cloudflare Pages, jeder andere Hoster
 

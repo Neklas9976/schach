@@ -51,7 +51,7 @@ GitHub Pages kann das nicht.
    * **Start Command:** `node server/index.js`
    * **Health Check Path:** `/health`
 3. Unter *Environment* eintragen:
-   * `ALLOWED_ORIGINS` = `https://DEINNAME.github.io`
+   * `ALLOWED_ORIGINS` = `https://chessw0rld.github.io`
      (die Adresse deiner Seite, ohne Pfad; mehrere durch Komma getrennt)
 4. Nach dem ersten Start steht die Adresse oben, z. B.
    `https://schach-server.onrender.com`.
@@ -72,7 +72,7 @@ nicht will, nimmt den bezahlten Tarif (ab etwa 7 $/Monat) oder Fly.
 
 ```bash
 fly launch --no-deploy
-fly secrets set ALLOWED_ORIGINS=https://DEINNAME.github.io
+fly secrets set ALLOWED_ORIGINS=https://chessw0rld.github.io
 fly deploy
 ```
 
