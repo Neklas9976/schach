@@ -523,3 +523,11 @@ test('the presence check is wired to the actual sockets', () => {
   // sockets muss vor der Lobby stehen, sonst greift die Auskunft ins Leere.
   assert.ok(serverCode.indexOf('const sockets = new Map();') < serverCode.indexOf('new Lobby({'));
 });
+
+test('the status page says where the accounts actually live', () => {
+  // Von aussen war nicht zu erkennen, ob wirklich eine Datenbank dahintersteht.
+  // Ob die Wertungen den naechsten Neustart ueberleben, will man wissen, bevor
+  // sie es nicht tun.
+  const serverCode = fs.readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+  assert.match(serverCode, /store: store instanceof PostgresStore \? 'datenbank' : 'datei'/);
+});

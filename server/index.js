@@ -284,7 +284,12 @@ const server = http.createServer((request, response) => {
       ok: true,
       online: sockets.size,
       waiting: lobby.queueSize(),
-      games: [...lobby.games.values()].filter(g => g.status === 'active').length
+      games: [...lobby.games.values()].filter(g => g.status === 'active').length,
+      // Wo die Konten liegen. Von aussen war das sonst nicht zu erkennen -
+      // und ob eine Datenbank wirklich dahintersteht oder die Wertungen beim
+      // naechsten Ausrollen verschwinden, will man wissen, bevor es passiert.
+      store: store instanceof PostgresStore ? 'datenbank' : 'datei',
+      accounts: store.all().length
     }));
     return;
   }
