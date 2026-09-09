@@ -133,6 +133,41 @@ also weder blockieren noch dauerhaft hängen bleiben. Für die Zugregeln nutzt
 sie ausschließlich `chess-engine.js` – eine zweite Regelimplementierung wäre
 die klassische Quelle für illegale Computerzüge.
 
+### Woher die Regeln kommen
+
+`chess-engine.js` entscheidet seit der Umstellung nicht mehr selbst, welche
+Züge es gibt – das tut [chess.js](https://github.com/jhlywa/chess.js). Die
+Datei hat ihre Oberfläche behalten und ihren Kern getauscht: dieselben
+Funktionen, dieselben Zustands- und Zugobjekte, sodass `app.js`, der
+Suchworker und der Server davon nichts merken.
+
+Die Arbeitsteilung dahinter ist gemessen und nicht geraten. **chess.js
+entscheidet, welche Züge es gibt; `applyMove` führt sie aus.** Der Weg über
+chess.js kostet beim Ausführen eines Zuges das Hundertneunfache (656 ms
+gegen 6 ms für 20.000 Züge) – in der Suche wäre der eingebaute Gegner damit
+kaputt. Die Zugerzeugung dagegen ist über chess.js sogar etwas günstiger als
+die frühere handgeschriebene, solange man die ausführlichen Zugobjekte meidet:
+die erzeugen für die Eindeutigkeit der Kurznotation pro Zug die ganze Zugliste
+noch einmal.
+
+Der Preis dieser Teilung ist, dass `applyMove` Rochaderechte, en-passant-Feld
+und Zähler selbst fortschreibt und dabei von chess.js abweichen könnte.
+Dagegen steht `tests/chess-engine-chessjs-contract.test.mjs`: es vergleicht für
+jeden Zug aus tausenden Stellungen, ob dieselbe Stellung herauskommt. Die
+Kosten der Absicherung fallen damit beim Testen an und nicht bei jedem Zug
+eines Spielers.
+
+Was die Umstellung an Spielstärke kostet: der Suchworker schafft 1,0- bis
+1,7-mal weniger Stellungen pro Sekunde. In acht von neun gemessenen Fällen
+erreicht er dieselbe Suchtiefe wie zuvor und wählt denselben Zug; in einem
+Fall (Stufe 8, Eröffnungsstellung) kommt er auf Tiefe 4 statt 5.
+
+Nicht von chess.js kommen zwei Dinge, weil sie keine Regeln sind:
+`premoveTargets` und `castlingTarget` deuten eine Eingabe, statt zu
+entscheiden, was erlaubt ist. Ebenso bleibt das Lesen und Schreiben von FEN in
+der Datei – das ist Textverarbeitung mit eigenen, absichtlich strengen
+deutschen Fehlermeldungen.
+
 ### Stockfish nativ (empfohlen, volle Stärke)
 
 Ein Browser kann keine `.exe` ausführen – der lokale Flask-Server dagegen

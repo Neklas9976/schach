@@ -9,7 +9,9 @@
  * inside the AI is a classic source of illegal-move bugs.
  */
 
-importScripts('chess-engine.js');
+// chess.js zuerst: chess-engine.js baut darauf auf und bricht ohne es
+// sofort ab, statt mit halben Regeln weiterzurechnen.
+importScripts('vendor/chess.js', 'chess-engine.js');
 
 const E = self.ChessEngine;
 

@@ -3,11 +3,16 @@ import test from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+// chess.js gehoert in jede Sandbox, in der chess-engine.js laeuft: die
+// Engine holt die Regeln von dort und bricht ohne sie ab, statt mit halben
+// Regeln weiterzurechnen. Im Browser besorgt das ein eigenes <script>.
+const chessJsCode = fs.readFileSync(new URL('../static/vendor/chess.js', import.meta.url), 'utf8');
 const engineCode = fs.readFileSync(new URL('../static/chess-engine.js', import.meta.url), 'utf8');
 const notationCode = fs.readFileSync(new URL('../static/notation.js', import.meta.url), 'utf8');
 
 const sandbox = { window: {} };
 sandbox.globalThis = sandbox;
+vm.runInNewContext(chessJsCode, sandbox);
 vm.runInNewContext(engineCode, sandbox);
 vm.runInNewContext(notationCode, sandbox);
 

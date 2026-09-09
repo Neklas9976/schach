@@ -3,12 +3,17 @@ import test from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+// chess.js gehoert in jede Sandbox, in der chess-engine.js laeuft: die
+// Engine holt die Regeln von dort und bricht ohne sie ab, statt mit halben
+// Regeln weiterzurechnen. Im Browser besorgt das ein eigenes <script>.
+const chessJsCode = fs.readFileSync(new URL('../static/vendor/chess.js', import.meta.url), 'utf8');
 const engineCode = fs.readFileSync(new URL('../static/chess-engine.js', import.meta.url), 'utf8');
 const aiCode = fs.readFileSync(new URL('../static/ai.js', import.meta.url), 'utf8');
 const workerCode = fs.readFileSync(new URL('../static/ai-worker.js', import.meta.url), 'utf8');
 
 const sandbox = { window: {}, localStorage: undefined };
 sandbox.globalThis = sandbox;
+vm.runInNewContext(chessJsCode, sandbox);
 vm.runInNewContext(engineCode, sandbox);
 vm.runInNewContext(aiCode, sandbox);
 
@@ -19,6 +24,7 @@ test('the engine loads without a window object', () => {
   // chess-engine.js must work inside a Web Worker, where `window` is absent.
   const workerSandbox = { self: {} };
   workerSandbox.self.self = workerSandbox.self;
+  vm.runInNewContext(chessJsCode, workerSandbox);
   vm.runInNewContext(engineCode, workerSandbox);
   assert.ok(workerSandbox.self.ChessEngine, 'engine must attach to self in a worker');
 });
@@ -109,7 +115,9 @@ test('FEN reports lost castling rights', () => {
 test('the search worker only depends on the shared engine for rules', () => {
   // The AI must never carry its own move generator: a second rule
   // implementation is how engines start producing illegal moves.
-  assert.match(workerCode, /importScripts\(['"]chess-engine\.js['"]\)/);
+  // Beide Dateien, in dieser Reihenfolge: die Regeln kommen aus chess.js,
+  // ueber die unveraenderte Oberflaeche von chess-engine.js.
+  assert.match(workerCode, /importScripts\(['"]vendor\/chess\.js['"], ?['"]chess-engine\.js['"]\)/);
   assert.equal(/function\s+generateMoves|function\s+isLegal/.test(workerCode), false);
   assert.match(workerCode, /E\.legalMoves\(/);
   assert.match(workerCode, /E\.applyMove\(/);
@@ -191,6 +199,7 @@ function loadAI({ engineAvailable = false, serverFails = false, builtinFails = f
   sandbox.globalThis = sandbox;
   sandbox.window.dispatchEvent = event => { events.push(event); return true; };
 
+  vm.runInNewContext(chessJsCode, sandbox);
   vm.runInNewContext(engineCode, sandbox);
   vm.runInNewContext(aiCode, sandbox);
   return { AI: sandbox.window.ChessAI, E: sandbox.window.ChessEngine, events, requests, storage };

@@ -145,7 +145,15 @@ function compareState(state, trail) {
       `Schachlage (${color}) weicht ab ${where}`);
     // Zuege der Seite, die nicht am Zug ist - app.js fragt das fuer die
     // Bedrohungsanzeige, und chess.js kennt den Fall nicht von sich aus.
-    assert.deepEqual(moveSet(current.legalMoves(state, color)), moveSet(legacy.legalMoves(state, color)),
+    //
+    // Verglichen wird ohne en-passant-Feld, und zwar auf beiden Seiten. Dieses
+    // Feld gehoert der Seite am Zug; mit vertauschtem Zugrecht beschreibt es
+    // einen Doppelschritt, den es nie gab. Die alte Fassung erzeugte daraus in
+    // seltenen Stellungen ein Schlagen im Vorbeigehen ohne Doppelschritt - ein
+    // Fehler, den die neue nicht uebernimmt. Der eigene Test weiter unten haelt
+    // diese eine gewollte Abweichung fest, damit sie nicht hier untergeht.
+    const noEp = { ...plain(state), ep: null };
+    assert.deepEqual(moveSet(current.legalMoves(noEp, color)), moveSet(legacy.legalMoves(noEp, color)),
       `Zugmenge fuer ${color} weicht ab ${where}`);
   }
 
@@ -293,6 +301,27 @@ test('beide Engines lesen dieselben Sonderstellungen gleich', () => {
     assert.deepEqual(plain(current.fromFen(fen)), plain(state), `fromFen weicht ab: ${name}`);
     compareState(state, [name]);
   }
+});
+
+test('die eine gewollte Abweichung: en passant gehoert der Seite am Zug', () => {
+  // Weiss am Zug, e6 als en-passant-Feld - schwarz hat gerade e7-e5 gezogen.
+  const state = legacy.fromFen('rnbqkbnr/pppp1ppp/8/3Pp3/8/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 3');
+
+  // Fuer Weiss, die Seite am Zug, ist das Schlagen im Vorbeigehen legal - und
+  // beide Fassungen sehen es.
+  const white = moveSet(current.legalMoves(state));
+  assert.ok(white.some(m => m.includes('|ep|')), 'Weiss muss en passant schlagen koennen');
+  assert.deepEqual(white, moveSet(legacy.legalMoves(state)));
+
+  // Fuer Schwarz ergibt dasselbe Feld keinen Sinn: Schwarz hat den
+  // Doppelschritt gemacht, nicht darauf geantwortet. Die neue Fassung raeumt
+  // das Feld weg und liefert eine gueltige Zugmenge, statt wie chess.js die
+  // Stellung als ungueltig zurueckzuweisen oder wie die alte Fassung einen
+  // erfundenen Zug anzubieten.
+  const black = current.legalMoves(state, 'black');
+  assert.ok(black.length > 0, 'die Gegenseite muss trotzdem Zuege haben');
+  assert.equal(black.filter(m => m.isEnPassant).length, 0,
+    'fuer die Seite, die nicht am Zug ist, darf es kein en passant geben');
 });
 
 test('beide Engines lehnen dieselben kaputten FEN ab', () => {

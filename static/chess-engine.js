@@ -1,5 +1,57 @@
+/**
+ * Die Schachregeln - seit der Umstellung mit chess.js als Schiedsrichter.
+ *
+ * Diese Datei hat ihre Form behalten und ihren Kern getauscht. Nach aussen ist
+ * sie dieselbe wie vorher: dieselben Funktionen, dieselben Zustandsobjekte,
+ * dieselben Zugobjekte. app.js, ai-worker.js und der Server merken davon
+ * nichts. Innen entscheidet nicht mehr eine eigene Zugerzeugung, welche Zuege
+ * es gibt, sondern chess.js.
+ *
+ * Warum ueberhaupt: die Regeln sind die Stelle, an der ein Fehler am teuersten
+ * ist. Ein falsch beurteilter Zug entscheidet eine Partie, und niemand merkt es
+ * im Moment des Fehlers. chess.js ist an genau dieser Aufgabe seit Jahren
+ * geprueft; eine selbstgeschriebene Zugerzeugung ist es nicht.
+ *
+ * ------------------------------------------------------------------------
+ * Die Arbeitsteilung, und warum sie so und nicht anders ist
+ * ------------------------------------------------------------------------
+ *
+ * chess.js entscheidet, WELCHE Zuege es gibt. Diese Datei fuehrt sie AUS.
+ *
+ * Das ist keine Bequemlichkeit, sondern gemessen. applyMove ist reines
+ * Feldkopieren und kostet fuer 20.000 Aufrufe 6 ms. Dieselbe Arbeit ueber
+ * chess.js - Stellung laden, Zug machen, FEN zurueckschreiben - kostet 656 ms,
+ * das Hundertneunfache. In der Suche von ai-worker.js laeuft applyMove einmal
+ * pro betrachtetem Zug; ueber chess.js geleitet waere der eingebaute Gegner
+ * zwei Groessenordnungen langsamer und damit kaputt.
+ *
+ * Die Zugerzeugung dagegen ist ueber chess.js sogar guenstiger als vorher
+ * (405 ms gegen 477 ms fuer 20.000 Aufrufe), solange man die ausfuehrlichen
+ * Zugobjekte meidet - siehe legalMoves.
+ *
+ * Der Preis dieser Teilung ist, dass applyMove die Rochaderechte und das
+ * en-passant-Feld selbst fortschreibt und dabei von chess.js abweichen
+ * koennte. Deshalb liegt in tests/ ein Test, der fuer jeden Zug aus tausenden
+ * Stellungen vergleicht, ob unser Ergebnis dem von chess.js entspricht. Die
+ * Kosten dieser Absicherung fallen damit beim Testen an und nicht bei jedem
+ * Zug eines Spielers.
+ *
+ * Nicht von chess.js kommen zwei Dinge, weil sie keine Regeln sind:
+ * premoveTargets und castlingTarget beschreiben, wie eine Eingabe gemeint ist,
+ * nicht was erlaubt ist. Ebenso bleibt das Lesen und Schreiben von FEN hier -
+ * das ist Textverarbeitung mit eigenen, absichtlich strengen Fehlermeldungen.
+ */
 (function (global) {
   'use strict';
+
+  const lib = global.ChessJs;
+  if (!lib || typeof lib.Chess !== 'function') {
+    // Laut scheitern statt still auf eine halbe Engine zurueckfallen: ohne
+    // Regeln ist jede Antwort dieser Datei falsch, und eine falsche Antwort
+    // ueber Schach faellt erst mitten in einer Partie auf.
+    throw new Error('chess-engine.js braucht chess.js - static/vendor/chess.js muss vorher geladen sein');
+  }
+  const Chess = lib.Chess;
 
   const FILES = 'abcdefgh';
   const START = [
@@ -15,6 +67,21 @@
 
   const PIECE_NAMES = { p:'Bauer', n:'Springer', b:'Läufer', r:'Turm', q:'Dame', k:'König' };
   const VALUES = { p:1, n:3, b:3, r:5, q:9, k:100 };
+
+  /**
+   * Die Zugflaggen von chess.js.
+   *
+   * Nachgeschrieben statt importiert, weil chess.js sie nicht exportiert. Ein
+   * Test haelt fest, dass sie noch stimmen - verschoben sich die Werte nach
+   * einem Upgrade still, wuerde aus einer Rochade eine Umwandlung.
+   */
+  const BITS = {
+    CAPTURE: 2,
+    EP_CAPTURE: 8,
+    PROMOTION: 16,
+    KSIDE_CASTLE: 32,
+    QSIDE_CASTLE: 64
+  };
 
   function cloneBoard(board) { return board.map(row => row.slice()); }
   function cloneState(state) {
@@ -51,120 +118,110 @@
     return null;
   }
 
+  /* ------------------------------------------------------------------ *
+   * Die Bruecke zu chess.js
+   * ------------------------------------------------------------------ */
+
+  /**
+   * chess.js zaehlt Felder im 0x88-Schema: obere vier Bit die Reihe, untere
+   * vier die Linie, gezaehlt ab a8. Das ist genau die Anordnung, in der auch
+   * hier `board[reihe][linie]` liegt - a8 ist [0,0], e1 ist [7,4] und 0x74=116.
+   * Deshalb genuegt Schieben und Maskieren; eine Umrechnungstabelle waere nur
+   * eine zweite Gelegenheit, sich zu vertun.
+   */
+  function rowColOf(square0x88) { return [square0x88 >> 4, square0x88 & 15]; }
+
+  /**
+   * Eine chess.js-Partie in der Stellung `state`.
+   *
+   * Der Weg fuehrt ueber FEN, weil chess.js keinen anderen Eingang hat. Das
+   * kostet rund 11 Mikrosekunden - in der Zugerzeugung vertretbar, in
+   * applyMove nicht, siehe Kopfkommentar.
+   */
+  function gameFrom(state) {
+    return new Chess(toFen(state));
+  }
+
+  /**
+   * Ein interner chess.js-Zug wird zu einem Zug in der Form dieses Projekts.
+   *
+   * Ueber die internen Zuege statt ueber moves({verbose:true}), und das ist der
+   * Grund, warum die Umstellung ueberhaupt bezahlbar ist: ein ausfuehrliches
+   * Zugobjekt von chess.js erzeugt fuer die SAN-Eindeutigkeit die gesamte
+   * Zugliste ein zweites Mal und serialisiert zweimal die ganze Stellung - pro
+   * Zug. Fuer eine Stellung mit 36 Zuegen sind das 36 Zugerzeugungen; gemessen
+   * das 43-fache. Gebraucht wird davon hier nichts: SAN liefert sanForMove,
+   * wenn jemand danach fragt.
+   */
+  function toProjectMove(state, internal) {
+    const from = rowColOf(internal.from);
+    const to = rowColOf(internal.to);
+    const piece = state.board[from[0]][from[1]];
+    const move = { from, to, piece };
+
+    if (internal.flags & BITS.EP_CAPTURE) {
+      // Geschlagen wird nicht auf dem Zielfeld, sondern neben dem Bauern.
+      move.captured = state.board[from[0]][to[1]];
+      move.isEnPassant = true;
+    } else if (internal.flags & BITS.CAPTURE) {
+      move.captured = state.board[to[0]][to[1]];
+    }
+
+    if (internal.flags & BITS.PROMOTION) move.promotion = internal.promotion;
+
+    if (internal.flags & (BITS.KSIDE_CASTLE | BITS.QSIDE_CASTLE)) {
+      move.isCastle = true;
+      const row = from[0];
+      if (internal.flags & BITS.KSIDE_CASTLE) { move.rookFrom = [row, 7]; move.rookTo = [row, 5]; }
+      else { move.rookFrom = [row, 0]; move.rookTo = [row, 3]; }
+    }
+    return move;
+  }
+
   function isSquareAttacked(state, targetR, targetC, byColor) {
-    const pawn = byColor === 'white' ? 'P' : 'p';
-    const pawnRow = byColor === 'white' ? targetR + 1 : targetR - 1;
-    for (const dc of [-1,1]) {
-      const c = targetC + dc;
-      if (inBounds(pawnRow,c) && state.board[pawnRow][c] === pawn) return true;
-    }
-
-    const knight = byColor === 'white' ? 'N' : 'n';
-    for (const [dr,dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
-      const r=targetR+dr,c=targetC+dc;
-      if (inBounds(r,c) && state.board[r][c] === knight) return true;
-    }
-
-    const bishop = byColor === 'white' ? 'B' : 'b';
-    const rook = byColor === 'white' ? 'R' : 'r';
-    const queen = byColor === 'white' ? 'Q' : 'q';
-    for (const [dr,dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
-      let r=targetR+dr,c=targetC+dc;
-      while (inBounds(r,c)) {
-        const p=state.board[r][c];
-        if (p) { if (p===bishop || p===queen) return true; break; }
-        r+=dr; c+=dc;
-      }
-    }
-    for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-      let r=targetR+dr,c=targetC+dc;
-      while (inBounds(r,c)) {
-        const p=state.board[r][c];
-        if (p) { if (p===rook || p===queen) return true; break; }
-        r+=dr; c+=dc;
-      }
-    }
-
-    const king = byColor === 'white' ? 'K' : 'k';
-    for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) {
-      if (!dr && !dc) continue;
-      const r=targetR+dr,c=targetC+dc;
-      if (inBounds(r,c) && state.board[r][c]===king) return true;
-    }
-    return false;
+    return gameFrom(state).isAttacked(squareName(targetR, targetC), byColor === 'white' ? 'w' : 'b');
   }
 
   function isInCheck(state, color) {
     const king = findKing(state, color);
-    return !!king && isSquareAttacked(state, king[0], king[1], opponent(color));
+    if (!king) return false;
+    // Nicht ueber isCheck(): das gilt immer der Seite am Zug, gefragt ist hier
+    // aber eine beliebige Farbe - app.js fragt auch nach der anderen.
+    return gameFrom(state).isAttacked(squareName(king[0], king[1]), color === 'white' ? 'b' : 'w');
   }
 
-  function pushRayMoves(state, moves, r,c, dr,dc) {
-    const piece=state.board[r][c], color=colorOf(piece);
-    let tr=r+dr,tc=c+dc;
-    while(inBounds(tr,tc)) {
-      const target=state.board[tr][tc];
-      if (!target) moves.push({from:[r,c],to:[tr,tc],piece});
-      else { if (colorOf(target)!==color && typeOf(target)!=='k') moves.push({from:[r,c],to:[tr,tc],piece,captured:target}); break; }
-      tr+=dr;tc+=dc;
+  /**
+   * Alle legalen Zuege - Fesselungen, Schach und Rochaderechte inbegriffen.
+   *
+   * Mit `color` laesst sich nach der Seite fragen, die *nicht* am Zug ist. Das
+   * ist keine Schachfrage, sondern eine Anzeigefrage - app.js zeichnet damit
+   * Bedrohungen. chess.js kennt den Fall nicht, deshalb wird ihm eine Stellung
+   * mit vertauschtem Zugrecht vorgelegt.
+   *
+   * Dabei faellt das en-passant-Feld weg, und das ist eine bewusste Korrektur.
+   * Es gehoert der Seite, die gerade am Zug ist - mit vertauschtem Zugrecht
+   * beschreibt es einen Doppelschritt, den es nie gab. Die alte Fassung liess
+   * es stehen und erzeugte in seltenen Stellungen ein Schlagen im Vorbeigehen
+   * ohne vorangegangenen Doppelschritt; chess.js weist eine solche Stellung
+   * rundheraus als ungueltig zurueck. Beides zusammen ist der Beleg, dass hier
+   * nichts verloren geht, sondern etwas Falsches verschwindet.
+   */
+  function legalMoves(state, color = state.turn) {
+    const working = color === state.turn ? state : { ...cloneState(state), turn: color, ep: null };
+    const game = gameFrom(working);
+    const internal = game._moves({ legal: true });
+    const out = [];
+    for (let i = 0; i < internal.length; i++) {
+      const move = toProjectMove(working, internal[i]);
+      // Ein Koenig wird nicht geschlagen. In einer regulaeren Stellung kommt
+      // ein solcher Zug ohnehin nicht vor - wohl aber in der Abfrage oben mit
+      // vertauschtem Zugrecht, wenn der Gegner gerade im Schach steht: dann
+      // boete chess.js folgerichtig das Schlagen des Koenigs an. Als Antwort
+      // auf "was droht mir" ist das keine Auskunft, sondern Unsinn.
+      if (move.captured === 'k' || move.captured === 'K') continue;
+      out.push(move);
     }
-  }
-
-  function pseudoMoves(state, r,c) {
-    const piece=state.board[r][c]; if (!piece) return [];
-    const color=colorOf(piece), type=typeOf(piece), moves=[];
-    if (color !== state.turn) return moves;
-
-    if (type==='p') {
-      const dir=color==='white'?-1:1, start=color==='white'?6:1, promotionRow=color==='white'?0:7;
-      const one=r+dir;
-      if (inBounds(one,c) && !state.board[one][c]) {
-        if (one===promotionRow) ['q','r','b','n'].forEach(prom => moves.push({from:[r,c],to:[one,c],piece,promotion:prom}));
-        else moves.push({from:[r,c],to:[one,c],piece});
-        const two=r+2*dir;
-        if (r===start && !state.board[two][c]) moves.push({from:[r,c],to:[two,c],piece});
-      }
-      for (const dc of [-1,1]) {
-        const tr=r+dir,tc=c+dc; if(!inBounds(tr,tc)) continue;
-        const target=state.board[tr][tc];
-        if (target && colorOf(target)!==color && typeOf(target)!=='k') {
-          if (tr===promotionRow) ['q','r','b','n'].forEach(prom => moves.push({from:[r,c],to:[tr,tc],piece,captured:target,promotion:prom}));
-          else moves.push({from:[r,c],to:[tr,tc],piece,captured:target});
-        } else if (state.ep && state.ep[0]===tr && state.ep[1]===tc) {
-          const captured=state.board[r][tc];
-          if (captured && typeOf(captured)==='p' && colorOf(captured)!==color) moves.push({from:[r,c],to:[tr,tc],piece,captured,isEnPassant:true});
-        }
-      }
-      return moves;
-    }
-
-    if (type==='n') {
-      for (const [dr,dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
-        const tr=r+dr,tc=c+dc;if(!inBounds(tr,tc))continue;const t=state.board[tr][tc];
-        if(!t || (colorOf(t)!==color && typeOf(t)!=='k')) moves.push({from:[r,c],to:[tr,tc],piece,captured:t||null});
-      }
-      return moves;
-    }
-
-    if (type==='b' || type==='q') for (const [dr,dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) pushRayMoves(state,moves,r,c,dr,dc);
-    if (type==='r' || type==='q') for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) pushRayMoves(state,moves,r,c,dr,dc);
-
-    if (type==='k') {
-      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-        if(!dr&&!dc)continue;const tr=r+dr,tc=c+dc;if(!inBounds(tr,tc))continue;const t=state.board[tr][tc];
-        if(!t || (colorOf(t)!==color && typeOf(t)!=='k')) moves.push({from:[r,c],to:[tr,tc],piece,captured:t||null});
-      }
-      const enemy=opponent(color);
-      if (color==='white' && r===7 && c===4 && !isInCheck(state,'white')) {
-        if (state.castling.K && state.board[7][5]===null && state.board[7][6]===null && state.board[7][7]==='R' && !isSquareAttacked(state,7,5,enemy) && !isSquareAttacked(state,7,6,enemy)) moves.push({from:[7,4],to:[7,6],piece,isCastle:true,rookFrom:[7,7],rookTo:[7,5]});
-        if (state.castling.Q && state.board[7][1]===null && state.board[7][2]===null && state.board[7][3]===null && state.board[7][0]==='R' && !isSquareAttacked(state,7,3,enemy) && !isSquareAttacked(state,7,2,enemy)) moves.push({from:[7,4],to:[7,2],piece,isCastle:true,rookFrom:[7,0],rookTo:[7,3]});
-      }
-      if (color==='black' && r===0 && c===4 && !isInCheck(state,'black')) {
-        if (state.castling.k && state.board[0][5]===null && state.board[0][6]===null && state.board[0][7]==='r' && !isSquareAttacked(state,0,5,enemy) && !isSquareAttacked(state,0,6,enemy)) moves.push({from:[0,4],to:[0,6],piece,isCastle:true,rookFrom:[0,7],rookTo:[0,5]});
-        if (state.castling.q && state.board[0][1]===null && state.board[0][2]===null && state.board[0][3]===null && state.board[0][0]==='r' && !isSquareAttacked(state,0,3,enemy) && !isSquareAttacked(state,0,2,enemy)) moves.push({from:[0,4],to:[0,2],piece,isCastle:true,rookFrom:[0,0],rookTo:[0,3]});
-      }
-    }
-    return moves;
+    return out;
   }
 
   function applyMove(state, move) {
@@ -190,19 +247,6 @@
     next.fullmove=state.fullmove+(state.turn==='black'?1:0);
     next.turn=opponent(state.turn);
     return next;
-  }
-
-  function legalMoves(state, color=state.turn) {
-    const working = color===state.turn ? state : {...cloneState(state),turn:color};
-    const moves=[];
-    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-      const p=working.board[r][c]; if(!p||colorOf(p)!==color)continue;
-      for(const m of pseudoMoves(working,r,c)){
-        const next=applyMove(working,m);
-        if(!isInCheck(next,color)) moves.push(m);
-      }
-    }
-    return moves;
   }
 
   /**
@@ -291,6 +335,10 @@
    *
    * Unlike `legalMoves` this does not care whose turn it is - a premove is by
    * definition made out of turn.
+   *
+   * Bleibt bewusst handgeschrieben: das hier ist keine Regel, sondern eine
+   * Deutung einer Eingabe. chess.js kennt keine Zuege in Stellungen, die es
+   * noch nicht gibt.
    */
   function premoveTargets(state, from) {
     const [r, c] = from;
@@ -376,6 +424,12 @@
    * This is the entry point for text a person typed or pasted, so every field
    * is checked. A silently mis-parsed FEN would produce a board that looks
    * plausible and then generates illegal moves.
+   *
+   * Bleibt handgeschrieben, obwohl chess.js ein eigenes validateFen mitbringt:
+   * die Meldungen hier sind deutsch, benennen das schuldige Feld und werden im
+   * Einfuegen-Dialog angezeigt. Ein Wechsel wuerde die Sprache der Fehler
+   * aendern und obendrein die Menge der akzeptierten Stellungen verschieben -
+   * beides ohne Not.
    */
   function fromFen(fen) {
     if (typeof fen !== 'string') throw new Error('FEN muss Text sein');
@@ -438,21 +492,26 @@
   }
 
   function insufficientMaterial(state) {
-    const pieces=[];
-    for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=state.board[r][c];if(p&&typeOf(p)!=='k')pieces.push({p,r,c});}
-    if (pieces.length===0) return true;
-    if (pieces.some(x=>['p','q','r'].includes(typeOf(x.p)))) return false;
-    if (pieces.length===1) return ['b','n'].includes(typeOf(pieces[0].p));
-    if (pieces.every(x=>typeOf(x.p)==='b')) {
-      const colors=new Set(pieces.map(x=>(x.r+x.c)%2));
-      return colors.size===1;
-    }
-    return false;
+    return gameFrom(state).isInsufficientMaterial();
   }
 
+  /**
+   * Wie die Partie steht.
+   *
+   * Die Reihenfolge der Pruefungen ist Absicht und aelter als diese Datei:
+   * erst die Faelle ohne Zug, dann die Fuenfzig-Zuege-Regel, dann Wiederholung,
+   * dann Materialmangel. Matt schlaegt jedes Remis.
+   *
+   * Die Wiederholung kommt als `repetitionMap` von aussen und nicht aus
+   * chess.js: die Bibliothek zaehlt nur Stellungen, die sie selbst gespielt
+   * hat, waehrend die Partie hier als Kette von Zustaenden vorliegt, in der
+   * auch vor- und zurueckgeblaettert wird.
+   */
   function status(state, repetitionMap={}) {
-    const inCheck=isInCheck(state,state.turn);
-    const moves=legalMoves(state);
+    const game = gameFrom(state);
+    const inCheck = game.isCheck();
+    const moves = game._moves({ legal: true });
+
     if (moves.length===0) {
       if (inCheck) return {type:'checkmate',winner:opponent(state.turn),inCheck:true,legalMoves:0};
       return {type:'stalemate',winner:null,inCheck:false,legalMoves:0};
@@ -460,29 +519,31 @@
     if (state.halfmove>=100) return {type:'fifty-move',winner:null,inCheck,legalMoves:moves.length};
     const key=fenKey(state);
     if ((repetitionMap[key]||0)>=3) return {type:'threefold',winner:null,inCheck,legalMoves:moves.length};
-    if (insufficientMaterial(state)) return {type:'insufficient-material',winner:null,inCheck,legalMoves:moves.length};
+    if (game.isInsufficientMaterial()) return {type:'insufficient-material',winner:null,inCheck,legalMoves:moves.length};
     return {type:inCheck?'check':'playing',winner:null,inCheck,legalMoves:moves.length};
   }
 
+  /**
+   * Der Zug in Kurznotation.
+   *
+   * Hier ist das ausfuehrliche Zugobjekt von chess.js genau richtig: es kommt
+   * einmal pro tatsaechlich gespieltem Zug vor, nicht millionenfach in einer
+   * Suche. Und es loest den Teil, der von Hand am fehleranfaelligsten ist -
+   * wann zwei Springer sich unterscheiden muessen und ob ein Zeichen fuer
+   * Schach oder Matt ans Ende gehoert.
+   *
+   * `next` und `repetitionMap` werden nicht mehr gebraucht; sie bleiben in der
+   * Signatur, weil sechs Aufrufstellen sie uebergeben und die Umstellung deren
+   * Verhalten nicht anfassen soll.
+   */
   function sanForMove(state, move, next, repetitionMap={}) {
-    const piece=move.piece, type=typeOf(piece), isCapture=!!(move.captured||move.isEnPassant);
-    if (move.isCastle) return move.to[1]===6 ? 'O-O' : 'O-O-O';
-    let text='';
-    if(type!=='p') {
-      text=type.toUpperCase();
-      const others=legalMoves(state).filter(m=>m.from[0]!==move.from[0]||m.from[1]!==move.from[1]).filter(m=>m.to[0]===move.to[0]&&m.to[1]===move.to[1]&&typeOf(m.piece)===type);
-      if (others.length) {
-        const sameFile=others.some(m=>m.from[1]===move.from[1]);
-        const sameRank=others.some(m=>m.from[0]===move.from[0]);
-        if(!sameFile) text+=FILES[move.from[1]]; else if(!sameRank) text+=(8-move.from[0]); else text+=squareName(move.from[0],move.from[1]);
-      }
-    } else if(isCapture) text+=FILES[move.from[1]];
-    if(isCapture) text+='x';
-    text+=squareName(move.to[0],move.to[1]);
-    if(move.promotion) text+='='+move.promotion.toUpperCase();
-    const st=status(next,repetitionMap);
-    if(st.type==='checkmate') text+='#'; else if(st.inCheck) text+='+';
-    return text;
+    const game = gameFrom(state);
+    const played = game.move({
+      from: squareName(move.from[0], move.from[1]),
+      to: squareName(move.to[0], move.to[1]),
+      promotion: move.promotion || undefined
+    });
+    return played.san;
   }
 
   const api={

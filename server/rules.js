@@ -20,11 +20,17 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source = fs.readFileSync(new URL('../static/chess-engine.js', import.meta.url), 'utf8');
+// Zwei Dateien in dieselbe Sandbox, in dieser Reihenfolge: chess-engine.js
+// erwartet chess.js als globales ChessJs und wirft sonst. Beide sind fuer
+// den Browser geschrieben und haengen sich an `window`.
+const files = ['../static/vendor/chess.js', '../static/chess-engine.js'];
 
 const sandbox = { window: {} };
 sandbox.globalThis = sandbox;
-vm.runInNewContext(source, sandbox, { filename: 'chess-engine.js' });
+for (const file of files) {
+  const source = fs.readFileSync(new URL(file, import.meta.url), 'utf8');
+  vm.runInNewContext(source, sandbox, { filename: file.split('/').pop() });
+}
 
 export const ChessEngine = sandbox.window.ChessEngine;
 
