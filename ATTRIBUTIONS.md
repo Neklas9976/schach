@@ -112,6 +112,33 @@ hundertmal so groß wie die Originale.
 
 ---
 
+## Schachregeln — chess.js
+
+**Datei:** `static/vendor/chess.js` (~105 KB), Lizenztext in
+`static/vendor/LICENSE-chess.js.txt`
+
+**Herkunft:** chess.js 1.4.0 von Jeff Hlywa,
+<https://github.com/jhlywa/chess.js>, bezogen aus dem npm-Paket `chess.js`.
+
+**Lizenz:** BSD-2-Clause (Copyright © 2025 Jeff Hlywa). Die Lizenz verlangt,
+dass Copyright-Hinweis und Lizenztext bei jeder Weitergabe beiliegen — beides
+wird mit ausgeliefert. BSD-2-Clause ist mit der GPLv3 verträglich, unter der
+dieses Projekt als Ganzes steht.
+
+**Änderungen gegenüber dem Original:** zwei, beide rein mechanisch. Das
+abschließende `export`-Statement des ESM-Builds wurde zu einer Zuweisung an den
+globalen Namensraum, und der Verweis auf die nicht mitgelieferte Sourcemap ist
+entfernt. Der Grund steht in `tools/vendor-chess-js.mjs`: die Seite hat bewusst
+keinen Build-Schritt, und ein `<script type="module">` liefe erst nach allen
+klassischen Skripten. Die Umwandlung ist dort als wiederholbares Werkzeug
+hinterlegt und lässt sich mit `npm run vendor` jederzeit neu ausführen.
+
+**Warum überhaupt:** die Schachregeln sind der Teil des Programms, bei dem ein
+Fehler am teuersten ist — ein falsch beurteilter Zug entscheidet eine Partie.
+chess.js ist über Jahre an genau dieser Aufgabe geprüft worden.
+
+---
+
 ## Taktikaufgaben
 
 `static/puzzles.json` ist **in diesem Projekt selbst erzeugt** worden und stammt

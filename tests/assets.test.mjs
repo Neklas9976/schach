@@ -27,7 +27,11 @@ function filesUnder(dir, extensions) {
 
 // Third-party code that ships as-is. It is never edited here, so scanning it
 // for our own rules would only report its own documentation.
-const VENDORED = ['stockfish.js'];
+// Fremdcode, der unveraendert mitgeliefert wird. Diese Dateien nennen in ihrem
+// Lizenzkopf die eigene Projektseite, was die Regel "nichts von aussen" sonst
+// als Verstoss lesen wuerde. Jede von ihnen hat stattdessen einen eigenen Test,
+// der genau festhaelt, welche URLs darin vorkommen duerfen.
+const VENDORED = ['stockfish.js', 'chess.js'];
 
 // Exactly what a static host would serve: the page and everything under
 // static/. Named rather than discovered from the root, which would wander into
@@ -67,6 +71,24 @@ test('the bundled engine fetches nothing from the network', () => {
   // The only one is the project's own homepage, in the licence header.
   assert.deepEqual(urls, ['http://github.com/nmrugg/stockfish.js']);
   assert.ok(fs.existsSync(path.join(root, 'static', 'stockfish.wasm')), 'the wasm payload must ship alongside');
+});
+
+test('die eingebettete Regelbibliothek holt nichts aus dem Netz', () => {
+  const file = path.join(root, 'static', 'vendor', 'chess.js');
+  const text = fs.readFileSync(file, 'utf8');
+  const urls = [...text.matchAll(/https?:\/\/[^\s"'`)]+/g)].map(m => m[0]);
+  // Alle vier stehen in Kommentaren: zwei Projektseiten, die PGN-Spezifikation
+  // und ein Issue, das eine Sonderregel begruendet. Keine davon wird geladen.
+  // Die Liste ist trotzdem exakt, damit eine fuenfte URL nach einem Upgrade
+  // auffaellt, statt unbemerkt in die ausgelieferte Seite zu wandern.
+  assert.deepEqual([...new Set(urls)].sort(), [
+    'http://www.chessclub.com/help/PGN-spec',
+    'https://github.com/jhlywa/chess.js',
+    'https://github.com/jhlywa/chess.js/issues/230',
+    'https://peggyjs.org/'
+  ]);
+  assert.ok(fs.existsSync(path.join(root, 'static', 'vendor', 'LICENSE-chess.js.txt')),
+    'BSD-2-Clause verlangt, dass der Lizenztext mitgeliefert wird');
 });
 
 test('the app loads nothing from outside itself', () => {
