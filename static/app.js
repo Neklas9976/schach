@@ -755,6 +755,16 @@
     const candidates=ChessEngine.movesBetween(state,[fr,fc],[tr,tc]);
     if(!candidates.length){
       selected=[fr,fc];
+      /* Ein abgelehnter Zug war bisher voellig stumm, und Stille ist an
+       * dieser Stelle mehrdeutig: sie sieht genauso aus wie eine Eingabe, die
+       * gar nicht angekommen ist. Der Klang dafuer gibt es schon, er wurde
+       * bisher nur beim verworfenen Premove benutzt.
+       *
+       * Nicht jedoch, wenn die Figur dort wieder abgelegt wird, wo sie
+       * herkam: das ist kein Fehlversuch, sondern ein Zuruecknehmen, und wer
+       * dafuer eine Absage hoert, wird zu Recht wuetend.
+       */
+      if(fr!==tr||fc!==tc) window.ChessSound?.play('illegal');
       if (interaction.dragged) {
         // A rejected drag should never lock the board. Repaint only the
         // selection state; no move transaction is started.
@@ -1054,7 +1064,7 @@
       else window.ChessClock.onMoveMade(mover,state.turn);
     }
 
-    announceMove(move,nextStatus);
+    announceMove(move,nextStatus,interaction);
     if(gameEnded) window.setTimeout(()=>showGameOver(nextStatus),650);
     refreshEvaluation();
 
@@ -1583,27 +1593,46 @@
    * Sound
    * ===================================================================== */
 
-  function announceMove(move,resultingStatus){
-    if(!window.ChessSound) return;
-    const terminal=['checkmate','stalemate','fifty-move','threefold','insufficient-material'];
-    if(terminal.includes(resultingStatus.type)){
-      let outcome='draw';
-      if(resultingStatus.type==='checkmate'){
-        const winner=resultingStatus.winner;
-        // "Win" means the human won. In a two-player game at one board there
-        // is no losing side to address, so it is always the winning fanfare.
-        const humanColor=window.ChessAI&&window.ChessAI.isComputerGame()
-          ? window.ChessAI.getSettings().humanColor : winner;
-        outcome=winner===humanColor?'win':'loss';
+  /**
+   * Der Klang eines Zuges.
+   *
+   * Frueher endete eine Partie hier akustisch mitten im Zug: bei Matt, Patt
+   * oder Remis wurde nur die Fanfare gespielt und der Zug selbst gar nicht -
+   * die Figur setzte lautlos auf, und dann kam Musik. Der Jubel gehoert aber
+   * zur Meldung, die eine gute halbe Sekunde spaeter aufgeht, nicht zu dem
+   * Zug, der sie ausloest. Er steht deshalb jetzt in showGameOver. Hier bleibt,
+   * was der Zug selbst ist - und bei Matt ein kurzer Schlusspunkt darueber.
+   */
+  function announceMove(move,resultingStatus,interaction){
+    if(!window.ChessSound) return null;
+    const settings=getInteractionSettings();
+
+    /* Wann die ziehende Figur wirklich ankommt.
+     *
+     * Dieselbe Kurve, nach der sich auch die Animation richtet, nur in
+     * Feldern statt in Pixeln gerechnet. Das kostet kein Nachmessen des
+     * Layouts - und trifft trotzdem den Moment, den man sieht. Ohne das lag
+     * der zweite Schlag eines Schlagzuges bei festen 62 ms, waehrend die
+     * Figur bei einem Klickzug ueber vier Felder erst nach 260 ms ankam.
+     */
+    const squaresBetween=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
+    let settleMs=0;
+    if(settings.pieceAnimationEnabled){
+      if(move.isCastle&&move.rookFrom&&move.rookTo){
+        // Der Turm faehrt immer - auch dann, wenn der Koenig gezogen wurde.
+        settleMs=travelDuration(squaresBetween(move.rookFrom,move.rookTo),1,settings);
+      } else if(moverTravels(interaction)){
+        settleMs=travelDuration(squaresBetween(move.from,move.to),1,settings);
       }
-      window.ChessSound.playForMove({gameOver:outcome});
-      return;
     }
-    window.ChessSound.playForMove({
+
+    return window.ChessSound.playForMove({
       captured:!!(move.captured||move.isEnPassant),
       castle:!!move.isCastle,
       promotion:!!move.promotion,
-      check:!!resultingStatus.inCheck
+      check:!!resultingStatus.inCheck,
+      mate:resultingStatus.type==='checkmate',
+      settle:settleMs/1000
     });
   }
 
@@ -2028,6 +2057,17 @@
     const computerGame=!!(window.ChessAI&&window.ChessAI.isComputerGame());
     const humanColor=computerGame?window.ChessAI.getSettings().humanColor:null;
     const personal=outcome.result==='draw'?'draw':(outcome.result===humanColor?'win':'loss');
+
+    /* Die Fanfare gehoert hierher, nicht an den Zug.
+     *
+     * Sie stand frueher in announceMove und an der Aufgeben-Schaltflaeche -
+     * zwei Stellen, an denen sie den Zug verdraengt beziehungsweise sich
+     * selbst verdoppelt hat. Hier laeuft jeder Partieschluss durch, genau
+     * einmal, und genau in dem Moment, in dem das Ergebnis auch zu lesen ist.
+     * Im Training und online ist oben schon abgebrochen worden: dort meldet
+     * ein anderer das Ergebnis.
+     */
+    window.ChessSound?.playForMove({gameOver:personal});
 
     document.getElementById('gameover-title').textContent=outcome.title;
     document.getElementById('gameover-reason').textContent=outcome.reason;
@@ -2572,7 +2612,7 @@
     viewPly=movesLog.length;
     window.ChessClock?.stop();
     render();
-    window.ChessSound?.play('gameEndLoss');
+    // Kein Klang hier: showGameOver spielt ihn gleich, und zwar genau einmal.
     window.setTimeout(()=>showGameOver(ChessEngine.status(state,repetition)),400);
   }
 

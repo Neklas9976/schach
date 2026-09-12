@@ -199,26 +199,59 @@
      * A single thump is what the earlier version had, and it is why a capture
      * used to sound exactly like an ordinary move, only louder.
      */
-    capture(ctx, t, v) {
+    capture(ctx, t, v, { settle = 0.062 } = {}) {
+      // Zwei Grenzen, aus zwei Gruenden: zu dicht beieinander verschmelzen die
+      // beiden Schlaege zu einem, und zu weit auseinander zerfaellt der
+      // Schlagzug in zwei Ereignisse, die nichts mehr miteinander zu tun haben.
+      const land = Math.min(0.34, Math.max(0.045, settle));
       woodImpact(ctx, t, { gain: 0.62 * v, weight: 0.78, brightness: 1.25 });
       scrape(ctx, t + 0.004, { gain: 0.16 * v, duration: 0.06 });
-      woodImpact(ctx, t + 0.062, { gain: 1.05 * v, weight: 1.22, brightness: 0.88 });
+      woodImpact(ctx, t + land, { gain: 1.05 * v, weight: 1.22, brightness: 0.88 });
       // Set down off the board: soft, short and dark. Loud enough to be part
       // of the gesture, quiet enough not to become a third beat you count.
-      woodImpact(ctx, t + 0.23, { gain: 0.2 * v, weight: 0.7, brightness: 0.45 });
+      // Relativ zum Aufsetzen, nicht absolut - sonst holt es bei einem langen
+      // Klickzug den zweiten Schlag ein und die drei Ereignisse verschmieren.
+      woodImpact(ctx, t + land + 0.168, { gain: 0.2 * v, weight: 0.7, brightness: 0.45 });
     },
 
-    /** Two pieces land, king first and rook after - as the board shows it. */
-    castle(ctx, t, v) {
+    /**
+     * Two pieces land, king first and rook after - as the board shows it.
+     *
+     * `settle` ist der Abstand, den die Darstellung tatsaechlich zeigt: seit
+     * Stufe 3 faehrt beim gezogenen Koenig nur der Turm, und der braucht
+     * laenger als die 78 ms, die hier frueher fest verdrahtet waren.
+     */
+    castle(ctx, t, v, { settle = 0.078 } = {}) {
+      const land = Math.min(0.34, Math.max(0.05, settle));
       woodImpact(ctx, t, { gain: 0.85 * v, weight: 1.05 });
-      woodImpact(ctx, t + 0.078, { gain: 0.72 * v, weight: 0.92, brightness: 1.1 });
+      woodImpact(ctx, t + land, { gain: 0.72 * v, weight: 0.92, brightness: 1.1 });
     },
 
-    /** The move lands, and a short tense interval says what it did. */
+    /**
+     * Das Schach - nur das Intervall, ohne eigenen Aufschlag.
+     *
+     * Frueher brachte diese Stimme ihren eigenen Aufschlag mit und ersetzte
+     * damit den Zug, zu dem sie gehoerte: ein Schlagzug, der Schach bot, klang
+     * wie ein gewoehnliches Schach, und das Schlagen war schlicht weg. Als
+     * reiner Akzent legt sie sich statt dessen ueber den Zug - Schlagen und
+     * Schach sind dann beide zu hoeren, und zwar in dieser Reihenfolge.
+     */
     check(ctx, t, v) {
-      woodImpact(ctx, t, { gain: 0.85 * v, weight: 0.95, brightness: 1.15 });
-      tone(ctx, t + 0.045, { freq: 784, gain: 0.13 * v, duration: 0.1, type: 'triangle' });
-      tone(ctx, t + 0.115, { freq: 1046, gain: 0.12 * v, duration: 0.14, type: 'triangle' });
+      tone(ctx, t, { freq: 784, gain: 0.13 * v, duration: 0.1, type: 'triangle' });
+      tone(ctx, t + 0.07, { freq: 1046, gain: 0.12 * v, duration: 0.14, type: 'triangle' });
+    },
+
+    /**
+     * Das Matt - kein Jubel, sondern ein Schlusspunkt.
+     *
+     * Der Jubel gehoert zur Meldung, die eine gute halbe Sekunde spaeter
+     * aufgeht, nicht zu dem Zug, der sie ausloest. Hier steht deshalb eine
+     * fallende Quinte unter dem Zug: sie sagt "zu Ende", und sie sagt es
+     * leise genug, dass der Aufschlag des Zuges davor noch zu hoeren ist.
+     */
+    checkmate(ctx, t, v) {
+      tone(ctx, t, { freq: 392, gain: 0.13 * v, duration: 0.22, type: 'triangle' });
+      tone(ctx, t + 0.15, { freq: 262, gain: 0.14 * v, duration: 0.42, type: 'triangle' });
     },
 
     /** The pawn is set down, then something better is put in its place. */
@@ -287,15 +320,26 @@
       writeSetting('volume', settings.volume);
     },
 
-    play(name) {
-      if (!settings.enabled) return;
+    /**
+     * Spielt eine Stimme.
+     *
+     * `options.delay` verschiebt den Einsatz in Sekunden - damit legt sich ein
+     * Akzent hinter den Zug, zu dem er gehoert, statt mit ihm zusammenzufallen.
+     * Alles Weitere in `options` reicht die Stimme selbst aus; wer davon nichts
+     * kennt, ignoriert es.
+     */
+    play(name, options = {}) {
+      if (!settings.enabled) return false;
       const voice = VOICES[name];
-      if (!voice) return;
+      if (!voice) return false;
       const ctx = ensureContext();
-      if (!ctx) return;
+      if (!ctx) return false;
       try {
-        voice(ctx, ctx.currentTime + 0.005, settings.volume);
+        const delay = Number(options.delay) > 0 ? Number(options.delay) : 0;
+        voice(ctx, ctx.currentTime + 0.005 + delay, settings.volume, options);
+        return true;
       } catch { /* a sound must never break the move it belongs to */ }
+      return false;
     },
 
     /**
@@ -313,20 +357,45 @@
     },
 
     /**
-     * Picks the sound for a move that was just played. Kept here so the board
-     * code does not have to know the precedence rules: check outranks the
-     * capture that delivered it, and promotion outranks both.
+     * Der Klang eines gerade gespielten Zuges.
+     *
+     * Zwei Schichten statt einer Rangfolge, und das ist die eigentliche
+     * Aenderung. Frueher entschied eine Kette von else-if, WELCHER einzelne
+     * Klang gespielt wird - und weil `check` darin ueber `captured` stand,
+     * klang ein Schlagzug, der Schach bot, wie ein gewoehnliches Schach. Das
+     * Schlagen war nicht leiser, es war weg.
+     *
+     * Jetzt gibt es unten immer den Zug selbst: aufsetzen, schlagen,
+     * rochieren oder umwandeln - genau eines davon, denn ein Zug ist genau
+     * eine Bewegung. Darueber legt sich, falls faellig, der Akzent: Schach
+     * oder Matt. Beides zusammen ist zu hoeren, und zwar in der Reihenfolge,
+     * in der es passiert ist.
+     *
+     * `settle` sagt, wann die ziehende Figur ankommt - siehe capture/castle.
+     * Gibt den Namen der gespielten Grundstimme zurueck, damit ein Test nicht
+     * auf Toene hoeren muss, um zu wissen, was ausgeloest wurde.
      */
-    playForMove({ captured = false, castle = false, promotion = false, check = false, gameOver = null } = {}) {
+    playForMove({ captured = false, castle = false, promotion = false,
+                  check = false, mate = false, gameOver = null, settle } = {}) {
       if (gameOver) {
-        api.play(gameOver === 'win' ? 'gameEndWin' : gameOver === 'loss' ? 'gameEndLoss' : 'gameEndDraw');
-        return;
+        const voice = gameOver === 'win' ? 'gameEndWin' : gameOver === 'loss' ? 'gameEndLoss' : 'gameEndDraw';
+        api.play(voice);
+        return voice;
       }
-      if (promotion) api.play('promote');
-      else if (check) api.play('check');
-      else if (castle) api.play('castle');
-      else if (captured) api.play('capture');
-      else api.play('move');
+
+      const base = promotion ? 'promote'
+        : castle ? 'castle'
+        : captured ? 'capture'
+        : 'move';
+      // Nur capture und castle kennen `settle`; die anderen ignorieren es.
+      api.play(base, settle == null ? {} : { settle });
+
+      // Der Akzent setzt hinter dem Aufschlag ein, nicht auf ihm. Beim Matt
+      // etwas spaeter: es ist der Schlusspunkt, nicht der Zug.
+      if (mate) api.play('checkmate', { delay: 0.16 });
+      else if (check) api.play('check', { delay: 0.05 });
+
+      return base;
     }
   };
 
