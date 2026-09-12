@@ -31,3 +31,16 @@ server/data/
 # Arbeitsspuren der Werkzeuge: Protokolle und Zwischenstaende der
 # Puzzle-Erzeugung. Das Ergebnis steht in static/puzzles.json.
 tools/log/
+
+# Python-Umgebung dieses Arbeitsplatzes. 171 MB und 4221 Dateien - die haben
+# auf einer veroeffentlichten Seite nichts zu suchen.
+Lib/
+Scripts/
+pyvenv.cfg
+
+# Werkzeuge und ihre Zwischenstaende, nicht das Projekt.
+.claude/
+.agents/
+.codex/
+graphify-out/
+.impeccable/
