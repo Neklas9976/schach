@@ -423,6 +423,8 @@
 
   let dragSession=null;
   let moveTransaction=null;
+  /** How long a move may hold the board before it is treated as stuck. */
+  const COMMIT_LOCK_CEILING_MS=2000;
 
   function getInteractionSettings(){
     if(typeof window.getChessSettings === 'function') return window.getChessSettings();
@@ -468,6 +470,60 @@
 
   function removeDragGhost(){
     if(dragSession?.ghost){dragSession.ghost.remove();dragSession.ghost=null;}
+  }
+
+  /**
+   * The one way a drag ends - a drop, an abort, a lost capture, a watchdog.
+   *
+   * Every ending used to clean up for itself, and each list of steps was
+   * slightly different. That is what let a missed pointerup leave the board
+   * dragging forever: the ghost stayed under the cursor, the source square
+   * stayed empty, `piece-dragging` stayed on the body, and because beginDrag
+   * refuses to start while a session exists, every later click was ignored.
+   * With one teardown there is no ending that can forget a step.
+   *
+   * The sweep over the document at the end is deliberate belt and braces: a
+   * ghost whose session was already dropped has no owner left to remove it.
+   */
+  function endDragSession(session){
+    const s=session||dragSession;
+    if(s){
+      if(s.watchdog){window.clearTimeout(s.watchdog);s.watchdog=null;}
+      s.sourceSquare?.classList.remove('drag-source-hidden');
+      if(s.ghost){s.ghost.remove();s.ghost=null;}
+      if(dragSession===s){dragSession=null;activePointerId=null;}
+      try{if(boardEl.hasPointerCapture(s.pointerId))boardEl.releasePointerCapture(s.pointerId);}catch{}
+    }
+    if(!dragSession){
+      document.body.classList.remove('piece-dragging');
+      for(const orphan of document.querySelectorAll('.drag-ghost')) orphan.remove();
+      for(const square of document.querySelectorAll('.drag-source-hidden')) square.classList.remove('drag-source-hidden');
+    }
+    return s;
+  }
+
+  /**
+   * Last line of defence for a drag nobody ended.
+   *
+   * Nothing in the pointer protocol guarantees that a pointerup arrives. The
+   * button can be released over a native context menu, over another window,
+   * outside the browser entirely, or after the page was put in the background
+   * - and when the capture could not be taken, no `lostpointercapture` follows
+   * either. A drag that has outlived every plausible gesture is not a drag any
+   * more, and leaving it open is what made the board need a reload.
+   *
+   * Generous on purpose: this must never cut a real drag short, only clear one
+   * that is already lost. It is re-armed on every pointermove.
+   */
+  const DRAG_WATCHDOG_MS=15000;
+  function armDragWatchdog(session){
+    if(session.watchdog) window.clearTimeout(session.watchdog);
+    session.watchdog=window.setTimeout(()=>{
+      if(dragSession!==session||session.dropHandled) return;
+      endDragSession(session);
+      selected=null;
+      render();
+    },DRAG_WATCHDOG_MS);
   }
 
   // One stable board-level pointer controller. Render() may replace every
@@ -520,13 +576,27 @@
     dragSession=session;
     activePointerId=e.pointerId;
     selected=[start.row,start.col];
-    try{boardEl.setPointerCapture(e.pointerId);}catch{}
+    // The capture routes every later pointer event to the board even once the
+    // pointer has left it. When it cannot be taken the drag still runs - the
+    // window-level listeners deliver the release either way - but the failure
+    // must not vanish silently as it used to: without a capture there is no
+    // `lostpointercapture` to end a session nobody else ends, so the watchdog
+    // is the only thing left, and it has to be armed in both cases.
+    try{
+      boardEl.setPointerCapture(e.pointerId);
+      session.captured=boardEl.hasPointerCapture(e.pointerId);
+    }catch{
+      session.captured=false;
+    }
+    armDragWatchdog(session);
   }
 
   function updateDrag(e){
     const s=dragSession;
     if(!s || s.pointerId!==e.pointerId || s.dropHandled) return;
     e.preventDefault();
+    // A drag that is still moving is still alive.
+    armDragWatchdog(s);
     if(!s.moved && Math.hypot(e.clientX-s.startX,e.clientY-s.startY)>5){
       s.moved=true;
       document.body.classList.add('piece-dragging');
@@ -556,11 +626,7 @@
     const target=pointerToSquare(e.clientX,e.clientY);
     const dropPoint={x:e.clientX,y:e.clientY};
 
-    s.sourceSquare?.classList.remove('drag-source-hidden');
-    if(s.ghost){s.ghost.remove();s.ghost=null;}
-    document.body.classList.remove('piece-dragging');
-    dragSession=null; activePointerId=null;
-    try{if(boardEl.hasPointerCapture(e.pointerId))boardEl.releasePointerCapture(e.pointerId);}catch{}
+    endDragSession(s);
 
     if(!moved){
       if(s.settings.pieceMovement==='drag') selected=null;
@@ -570,25 +636,44 @@
 
     suppressNextClick=true;
     window.setTimeout(()=>{suppressNextClick=false;},50);
-    requestAnimationFrame(()=>{
-      try{
-        if(target) tryMove(fromR,fromC,target.row,target.col,{dragged:true,dropPoint});
-        else {selected=null;render();}
-      }catch(error){
-        console.error('Chess move pipeline error:',error);
-        moveTransaction=null; selected=null; render();
-      }
-    });
+
+    /* The move runs in the event that produced it.
+     *
+     * This used to be deferred into the next animation frame, which is the
+     * next 16 ms only while the frame clock runs at full speed. A throttled
+     * tab - an occluded window, a background monitor, power saving, a busy
+     * main thread - stretches that to a second or more, and until some later
+     * input happens to wake the clock the piece simply refuses to land.
+     * Measured at a throttled 1 Hz: 1059 ms between releasing the button and
+     * the move appearing, with the piece snapped back in the meantime.
+     *
+     * Nothing here needs a frame. `target` was already resolved above from the
+     * pointerup coordinates, and the animation that does need frame timing is
+     * started inside commitMove and keeps its own.
+     */
+    try{
+      if(target) tryMove(fromR,fromC,target.row,target.col,{dragged:true,dropPoint});
+      else {selected=null;render();}
+    }catch(error){
+      console.error('Chess move pipeline error:',error);
+      moveTransaction=null; selected=null;
+      // The repaint is the recovery, so it must not be able to throw the board
+      // into the same hole a second time.
+      try{ render(); }catch(renderError){ console.error('Chess render error:',renderError); }
+    }
   }
 
   function cancelDrag(e){
     const s=dragSession;
-    if(!s || s.pointerId!==e.pointerId)return;
-    s.sourceSquare?.classList.remove('drag-source-hidden');
-    if(s.ghost)s.ghost.remove();
-    document.body.classList.remove('piece-dragging');
-    dragSession=null; activePointerId=null; selected=null;
-    try{if(boardEl.hasPointerCapture(e.pointerId))boardEl.releasePointerCapture(e.pointerId);}catch{}
+    // An event without a pointer id is one of the coarse aborts - the window
+    // losing focus, say - and those end whatever session is open.
+    if(!s || (e && e.pointerId!=null && s.pointerId!==e.pointerId)) return;
+    // A capture released by a completed drop is the normal tail of a
+    // successful move, not an abort. Without this guard the `lostpointercapture`
+    // that follows every release would cancel the drag that just succeeded.
+    if(s.dropHandled) return;
+    endDragSession(s);
+    selected=null;
     render();
   }
 
@@ -857,6 +942,29 @@
     const settings=getInteractionSettings();
     const shouldAnimate=!!settings.pieceAnimationEnabled;
     moveTransaction={from:move.from,to:move.to,piece,startedAt:performance.now()};
+
+    /* A ceiling on the lock, armed before anything else can throw.
+     *
+     * The transaction is what makes the board ignore the mouse, and the two
+     * timers that normally release it are registered at the very end of this
+     * function - after the render, the DOM work and the animation setup. An
+     * exception anywhere in between left the lock standing with nothing left
+     * to clear it: humanMayAct() answered false from then on, and the board
+     * was dead until the page was reloaded.
+     *
+     * This only ever fires when the ordinary release did not. A move settles
+     * in roughly 460 ms with the default animation, so a lock still standing
+     * after two seconds is a lock nobody is going to lift.
+     */
+    const lockedTransaction=moveTransaction;
+    window.setTimeout(()=>{
+      if(moveTransaction!==lockedTransaction) return;
+      console.error('Chess move transaction never settled - releasing the board.');
+      moveTransaction=null;
+      for(const square of document.querySelectorAll('.animation-target-hidden')) square.classList.remove('animation-target-hidden');
+      for(const orphan of document.querySelectorAll('.move-animator')) orphan.remove();
+      render();
+    },COMMIT_LOCK_CEILING_MS);
 
     // Render the final logical position exactly once. The moving piece is
     // hidden only after this render, while a separate compositor-layer copy
@@ -1649,6 +1757,34 @@
   boardEl.addEventListener('pointerup', finishDrag, {passive:false});
   boardEl.addEventListener('pointercancel', cancelDrag, {passive:false});
   boardEl.addEventListener('lostpointercapture', cancelDrag, {passive:false});
+
+  /* The same endings, heard a second time at the window.
+   *
+   * The board only hears them while it holds the pointer capture, and a
+   * capture can be refused or taken away - by a native context menu, by the
+   * browser starting a drag of its own, by a window switch. Whenever that
+   * happened the release never reached finishDrag and the session stayed open
+   * for good; the board was dead until the page was reloaded.
+   *
+   * Registered on the bubble phase so the board's own handler still runs
+   * first for events that reach it. By the time these see such an event the
+   * session is already closed and they do nothing, so a drop is never handled
+   * twice. The button test keeps the right-hand drawing gesture out of here -
+   * finishDrag would otherwise swallow the context menu on the whole page.
+   */
+  window.addEventListener('pointerup', e=>{
+    if(e.button!==0) return;
+    if(!dragSession || dragSession.pointerId!==e.pointerId || dragSession.dropHandled) return;
+    finishDrag(e);
+  });
+  window.addEventListener('pointercancel', e=>{
+    if(!dragSession || dragSession.pointerId!==e.pointerId) return;
+    cancelDrag(e);
+  });
+  // Alt-Tab, a native menu, the tab going away: the pointer is gone and no
+  // release is coming. Aborting is right here - committing a move the player
+  // may never have finished aiming would be worse than dropping it.
+  window.addEventListener('blur', ()=>{ if(dragSession) cancelDrag(null); });
   boardEl.addEventListener('click', e => {
     const square=e.target.closest?.('.square');
     if(square && boardEl.contains(square)) onSquareClick(Number(square.dataset.row),Number(square.dataset.col));
