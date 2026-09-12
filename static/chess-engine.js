@@ -546,9 +546,35 @@
     return played.san;
   }
 
+  /**
+   * Der Zug zu einer Kurznotation - oder null, wenn sie hier nicht passt.
+   *
+   * Die Gegenrichtung zu sanForMove, und der Grund, warum es sie gibt: einen
+   * SAN-Leser von Hand zu schreiben hiesse, dieselbe Mehrdeutigkeit ein zweites
+   * Mal aufzuloesen, die beim Schreiben entsteht - "Nbd7" ist nur im Kontext
+   * der ganzen Stellung eindeutig. Genau daran gehen PGN-Leser kaputt. chess.js
+   * kann beide Richtungen, also soll es auch beide machen.
+   *
+   * Erwartet die Notation ohne Schmuck: kein "+", kein "#", keine Ausrufe- oder
+   * Fragezeichen. notation.js raeumt das vorher weg.
+   */
+  function moveFromSan(state, san) {
+    if (typeof san !== 'string' || !san) return null;
+    let played;
+    try {
+      played = gameFrom(state).move(san);
+    } catch {
+      // chess.js wirft bei einer Notation, die hier nicht passt. Das ist keine
+      // Ausnahme, sondern die Antwort "nein" - der Aufrufer probiert weiter.
+      return null;
+    }
+    if (!played) return null;
+    return findLegalMove(state, parseSquare(played.from), parseSquare(played.to), played.promotion || null);
+  }
+
   const api={
     FILES, PIECE_NAMES, createInitialState, cloneState, colorOf, typeOf, opponent, squareName, parseSquare,
-    isSquareAttacked, isInCheck, findKing, legalMoves, movesBetween, findLegalMove, applyMove, premoveTargets, castlingTarget, fenKey, toFen, fromFen, status, sanForMove, insufficientMaterial
+    isSquareAttacked, isInCheck, findKing, legalMoves, movesBetween, findLegalMove, applyMove, premoveTargets, castlingTarget, fenKey, toFen, fromFen, status, sanForMove, moveFromSan, insufficientMaterial
   };
   global.ChessEngine=api;
 // The engine is pure logic with no DOM access, so it must also load inside a

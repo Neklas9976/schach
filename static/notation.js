@@ -9,9 +9,13 @@
  * Design note on parsing: there is no hand-written SAN parser here. Reading
  * "Nbd7" correctly means resolving exactly the same ambiguity that writing it
  * does, and a second implementation of that rule is how a loader starts
- * disagreeing with the board. Instead every legal move is rendered to SAN with
- * the engine's own `sanForMove` and matched against the token. At forty-odd
- * moves per position that is far too cheap to be worth optimising.
+ * disagreeing with the board. Die Aufloesung macht deshalb die Regel-Engine,
+ * ueber `moveFromSan` - und damit chess.js, das beide Richtungen beherrscht.
+ *
+ * Uebrig bleibt daneben der aeltere Weg, jeden legalen Zug nach SAN zu
+ * uebersetzen und zu vergleichen. Er laeuft nur noch fuer Notationen, die
+ * verstaendlich, aber nicht regelkonform sind - eine Umwandlung ohne "=" etwa.
+ * Fuer die Zuege einer normal notierten Partie wird er nicht mehr angefasst.
  */
 (function (global) {
   'use strict';
@@ -44,13 +48,24 @@
    */
   function resolveSan(state, token) {
     const wanted = bareSan(token).replace(/0/g, 'O');
+
+    // Zuerst chess.js: es liest die Kurznotation selbst und loest dabei
+    // dieselbe Mehrdeutigkeit auf, die es beim Schreiben erzeugt. Das ist der
+    // Weg fuer alles, was regelkonform notiert ist - und er kostet eine
+    // Zugerzeugung statt einer je Kandidat.
+    const direct = E.moveFromSan(state, wanted);
+    if (direct) {
+      const next = E.applyMove(state, direct);
+      return { move: direct, san: E.sanForMove(state, direct, next), next };
+    }
+
+    // Danach die Nachsicht gegenueber PGN aus freier Wildbahn. Die Faelle
+    // hier sind nicht regelkonform notiert, sondern nur verstaendlich: eine
+    // Umwandlung ohne "=" ("e8Q") kommt haeufig genug vor, um sie zu lesen,
+    // statt die Datei zurueckzuweisen. Dieser Weg laeuft nur noch fuer solche
+    // Ausreisser, nicht mehr fuer jeden Zug einer Partie.
     const candidates = sanIndex(state);
-
-    let hit = candidates.find(c => bareSan(c.san) === wanted);
-    if (hit) return hit;
-
-    // A promotion written without the "=" ("e8Q") is common enough to accept.
-    hit = candidates.find(c => bareSan(c.san).replace('=', '') === wanted.replace('=', ''));
+    const hit = candidates.find(c => bareSan(c.san).replace('=', '') === wanted.replace('=', ''));
     if (hit) return hit;
 
     return null;
