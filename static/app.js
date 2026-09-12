@@ -800,6 +800,48 @@
   function pieceScale(piece){ return piece.toLowerCase()==='p'?0.864:0.88; }
 
   /**
+   * Ob die Figur des Spielers selbst fliegen muss.
+   *
+   * Bei einem gezogenen Zug nicht: die Hand hat die Bewegung schon gemacht,
+   * die Figur liegt bereits auf dem Zielfeld. Sie von dort aus noch einmal
+   * fliegen zu lassen, war der Grund, warum die Animation frueher an der
+   * Mausposition hing - sie startete am Punkt des Loslassens und rutschte die
+   * letzten Pixel zur Feldmitte. Je nachdem, wie genau jemand traf, war das
+   * ein unsichtbarer Ruck oder ein sichtbarer Nachzieher.
+   *
+   * Alles, was der Spieler NICHT selbst bewegt hat, fliegt weiterhin: der
+   * Klickzug, der Zug des Gegners, der Zug der Engine, der Turm der Rochade.
+   *
+   * Dieselbe Frage entscheidet, welche Zielfelder waehrend des Flugs
+   * ausgeblendet werden - deshalb steht sie hier einmal und nicht zweimal.
+   */
+  function moverTravels(interaction){ return !interaction?.dragged; }
+
+  /**
+   * Wie lange eine Figur fuer ihren Weg braucht.
+   *
+   * Bewusst nicht linear zur Strecke. Eine feste Dauer laesst den Zug ueber
+   * ein Feld traege wirken, weil die Figur fuer zwei Zentimeter so lange
+   * braucht wie fuer das halbe Brett. Streng linear ist es genauso falsch:
+   * dann kriecht der lange Zug. Die Wurzel dazwischen haelt die wahrgenommene
+   * Geschwindigkeit ungefaehr konstant - ein Einfelderzug ist spuerbar
+   * kuerzer als einer ueber sieben Felder, aber nicht siebenmal so kurz.
+   *
+   * Gerechnet wird in Feldern, nicht in Pixeln, damit die Dauer auf einem
+   * kleinen Brett dieselbe ist wie auf einem grossen.
+   */
+  function travelDuration(distancePx, squarePx, settings){
+    const squares=squarePx>0?distancePx/squarePx:0;
+    const base=settings.animation?.duration||280;
+    // Ueber sieben Felder hinaus wird nichts mehr laenger - die Diagonale ist
+    // geometrisch weiter als die Kante, soll sich aber nicht anders anfuehlen.
+    const reach=Math.min(1,Math.sqrt(Math.min(squares,7)/7));
+    if(settings.pieceAnimation==='dynamic') return Math.round(Math.max(110,Math.min(300,base*(0.38+0.52*reach))));
+    if(settings.pieceAnimation==='arcade')  return Math.round(Math.max(150,Math.min(400,base*(0.55+0.62*reach))));
+    return Math.round(Math.max(140,Math.min(340,base*(0.50+0.55*reach))));
+  }
+
+  /**
    * Plays the move.
    *
    * A move can involve more than one piece. Castling moves two, and the board
@@ -820,10 +862,16 @@
     // Koenig und Turm laufen zusammen los. Ein Versatz war hier einmal
     // Absicht, las sich aber wie ein Ruckler statt wie ein Zug - eine Rochade
     // ist eine Bewegung, keine zwei nacheinander.
-    const travellers=[{piece,from:move.from,to:move.to,dragged:true}];
+    //
+    // Die gezogene Figur ist nicht dabei: siehe moverTravels. Beim Ziehen des
+    // Koenigs auf sein Rochadefeld bleibt damit genau der Turm uebrig, und das
+    // ist auch das Richtige - der Turm ist der Teil, den der Spieler nicht
+    // selbst bewegt hat und der deshalb erklaert werden muss.
+    const travellers=[];
+    if(moverTravels(interaction)) travellers.push({piece,from:move.from,to:move.to});
     if(move.isCastle && move.rookFrom && move.rookTo){
       const rook=ChessEngine.colorOf(piece)==='white'?'R':'r';
-      travellers.push({piece:rook,from:move.rookFrom,to:move.rookTo,dragged:false});
+      travellers.push({piece:rook,from:move.rookFrom,to:move.rookTo});
     }
 
     /* Erst alles messen, dann alles bauen.
@@ -857,18 +905,14 @@
     for(const leg of legs){
       const {from,to}=leg;
       const size=Math.min(from.width,to.width)*pieceScale(leg.piece);
-      // A drag already carried the piece to where the pointer let go; starting
-      // from the square centre instead would snap it backwards first.
-      const startPoint=(leg.dragged && interaction?.dragged && interaction.dropPoint)
-        ? interaction.dropPoint : {x:from.x,y:from.y};
+      // Immer von Feldmitte zu Feldmitte. Wo der Zeiger losgelassen wurde,
+      // spielt keine Rolle mehr - wer zieht, animiert nicht (moverTravels).
+      const startPoint={x:from.x,y:from.y};
 
       const startTransform=`translate3d(${startPoint.x-size/2}px,${startPoint.y-size/2}px,0)`;
       const endTransform=`translate3d(${to.x-size/2}px,${to.y-size/2}px,0)`;
       const distance=Math.hypot(to.x-startPoint.x,to.y-startPoint.y);
-
-      let duration=base.duration;
-      if(settings.pieceAnimation==='dynamic') duration=Math.round(Math.max(120,Math.min(420,distance*1.8)));
-      if(distance<2) duration=Math.min(duration,90);
+      const duration=travelDuration(distance,Math.min(from.width,to.width),settings);
 
       const midpoint=fraction=>`translate3d(${startPoint.x-size/2+(to.x-startPoint.x)*fraction}px,${startPoint.y-size/2+(to.y-startPoint.y)*fraction}px,0)`;
       let keyframes;
@@ -903,11 +947,31 @@
       const at=`translate3d(${capturedSpot.x-size/2}px,${capturedSpot.y-size/2}px,0)`;
       ghost.style.transform=at;
       animators.push(ghost);
+
+      /* Die geschlagene Figur weicht, wenn die schlagende ankommt.
+       *
+       * Vorher verblasste sie ab dem ersten Bild, also waehrend die schlagende
+       * Figur noch unterwegs war - zu sehen war ein Feld, das leer wurde,
+       * bevor jemand darauf stand. Mit dem Versatz liest sich die Reihenfolge
+       * richtig: erst die Ankunft, dann das Weichen.
+       *
+       * Beim gezogenen Zug fliegt nichts, die Figur steht schon da - dann
+       * weicht sie sofort.
+       */
+      const captureDelay=Math.round(longest*0.42);
+      const captureSpan=Math.max(130,Math.round((base.duration||280)*0.55));
+      // Zurueckhaltend statt spektakulaer: ein leichtes Einsinken und ein
+      // Verblassen. Das frueher benutzte scale(.55) sah aus, als wuerde die
+      // Figur weggesaugt.
       try{
-        animations.push(ghost.animate(
-          [{transform:`${at} scale(1)`,opacity:1},{transform:`${at} scale(.55)`,opacity:0}],
-          {duration:Math.max(140,base.duration*0.8),easing:'cubic-bezier(.4,0,.6,1)',fill:'both'}));
+        animations.push(ghost.animate([
+          {transform:`${at} scale(1)`,opacity:1,offset:0},
+          {transform:`${at} scale(.94)`,opacity:.5,offset:.55},
+          {transform:`${at} scale(.86)`,opacity:0,offset:1}
+        ],{duration:captureSpan,delay:captureDelay,easing:'cubic-bezier(.33,0,.67,1)',fill:'both'}));
       }catch{ ghost.remove(); }
+      // Das Sicherheitsnetz unten muss auch das Verblassen ueberdauern.
+      longest=Math.max(longest,captureDelay+captureSpan);
     }
 
     if(!animators.length){ done(); return ()=>{}; }
@@ -1037,11 +1101,21 @@
    * darf der Spieler waehrenddessen weiterziehen.
    */
   function startMoveAnimation(move,piece,interaction,settings){
-    // Every square a piece is flying to, not just the mover's. The final
-    // position is already painted, so an unhidden destination shows the piece
-    // sitting there while its copy is still in the air - which is exactly what
-    // made castling look wrong: the rook had arrived before the king moved.
-    const landing=[move.to];
+    /* Jedes Feld, auf das eine Figur zufliegt - nicht nur das des Ziehenden.
+     *
+     * Die Endstellung ist bereits gezeichnet; ein nicht ausgeblendetes
+     * Zielfeld zeigt die Figur also schon dort, waehrend ihre Kopie noch in
+     * der Luft ist. Genau das liess die Rochade falsch aussehen: der Turm war
+     * angekommen, bevor der Koenig losgelaufen war.
+     *
+     * Umgekehrt gilt aber auch: was nicht fliegt, darf nicht ausgeblendet
+     * werden. Bei einem gezogenen Zug liegt die Figur schon auf ihrem Feld -
+     * sie dort zu verstecken hiesse, sie fuer die Dauer der Animation
+     * verschwinden zu lassen. Beides entscheidet dieselbe Frage wie in
+     * animateMove, damit die Listen nicht auseinanderlaufen koennen.
+     */
+    const landing=[];
+    if(moverTravels(interaction)) landing.push(move.to);
     if(move.isCastle && move.rookTo) landing.push(move.rookTo);
     const hidden=landing
       .map(([r,c])=>document.querySelector(`.square[data-row="${r}"][data-col="${c}"]`))
@@ -1066,6 +1140,12 @@
     activeAnimation=handle;
 
     handle.stopAnimators=animateMove(move,piece,interaction,()=>handle.settle());
+
+    // Ein gezogener Zug ohne Schlag und ohne Rochade hat nichts zu animieren.
+    // animateMove meldet das sofort zurueck, und dann ist hier schon alles
+    // vorbei - ein Wecker darauf waere nur ein Zeiger auf einen erledigten
+    // Vorgang.
+    if(settled) return;
 
     // Hard safety net: a visual animation can never leave a square hidden for
     // ever, even if a browser refuses to fire an animation completion

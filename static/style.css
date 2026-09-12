@@ -432,6 +432,21 @@ button { font: inherit; }
 .square.check {
     outline: 5px solid rgba(224, 83, 83, .96);
     outline-offset: -5px;
+    /* Die Markierung faehrt kurz ein, statt hart zu erscheinen. Sie zieht
+       sich dabei von aussen an das Feld heran - das liest sich als "hier
+       zieht sich etwas zusammen" und braucht dafuer weder Farbwechsel noch
+       Pulsieren. Laeuft genau einmal: classList.toggle setzt die Klasse nur,
+       wenn sie sich geaendert hat, also startet sie kein zweites Mal. */
+    animation: check-settle .32s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes check-settle {
+    from { outline-color: rgba(224, 83, 83, 0); outline-offset: 3px; }
+    to   { outline-color: rgba(224, 83, 83, .96); outline-offset: -5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .square.check { animation: none; }
 }
 
 .legal-marker {
