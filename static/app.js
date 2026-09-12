@@ -422,9 +422,41 @@
   }
 
   let dragSession=null;
+  /**
+   * Gesetzt, solange commitMove laeuft - und keinen Lidschlag laenger.
+   *
+   * Frueher hielt diese Sperre die ganze Zuganimation lang und war damit das,
+   * was das Brett nach jedem Zug fuer eine Zehntel- bis Drittelsekunde taub
+   * machte. Die Animation braucht sie nicht: sie hat mit `activeAnimation`
+   * ihre eigene Buchfuehrung. Was sie wirklich absichert, ist der synchrone
+   * Lauf von commitMove selbst - und der ist nach einem Lidschlag vorbei.
+   */
   let moveTransaction=null;
-  /** How long a move may hold the board before it is treated as stuck. */
-  const COMMIT_LOCK_CEILING_MS=2000;
+
+  /**
+   * Die Animation, die gerade noch in der Luft ist - oder null.
+   *
+   * Sie besteht aus zwei Dingen, die wieder eingesammelt werden muessen: den
+   * fliegenden Kopien der Figuren und den Zielfeldern, die solange ausgeblendet
+   * bleiben, damit die Figur nicht zweimal zu sehen ist. Beides gehoert der
+   * Darstellung, nicht der Partie.
+   */
+  let activeAnimation=null;
+
+  /**
+   * Holt eine noch fliegende Animation sofort ein.
+   *
+   * Wird vor jedem Vorgang aufgerufen, der eine andere Stellung aufs Brett
+   * bringt. Der Zug davor ist damit sichtbar beendet, bevor der naechste
+   * gezeichnet wird - es gibt also nie zwei Animationen gleichzeitig und nie
+   * ein Zielfeld, das noch von der vorigen ausgeblendet ist. Das ersetzt das
+   * Warten: statt den naechsten Zug zu verbieten, wird der vorige fertig.
+   */
+  function settleActiveAnimation(){
+    const running=activeAnimation;
+    if(!running) return;
+    running.settle();
+  }
 
   function getInteractionSettings(){
     if(typeof window.getChessSettings === 'function') return window.getChessSettings();
@@ -781,7 +813,7 @@
    */
   function animateMove(move, piece, interaction, done){
     const settings=getInteractionSettings();
-    if(!settings.pieceAnimationEnabled){done();return;}
+    if(!settings.pieceAnimationEnabled){done();return ()=>{};}
 
     const base=settings.animation || {duration:280,easing:'cubic-bezier(0.4,0,0.2,1)'};
 
@@ -878,9 +910,10 @@
       }catch{ ghost.remove(); }
     }
 
-    if(!animators.length){ done(); return; }
+    if(!animators.length){ done(); return ()=>{}; }
 
     let finished=false;
+    /** Beendet die Animation sofort. Mehrfach aufrufbar, tut dann nichts. */
     const finish=()=>{
       if(finished)return;
       finished=true;
@@ -898,12 +931,34 @@
     // and every missed one leaves a floating piece in the DOM. The real
     // position is already on the board, so removing them early costs nothing.
     window.setTimeout(finish,longest+220);
+
+    // Gereicht wird der Abbruch nach aussen: der naechste Zug muss die noch
+    // fliegende Kopie sofort einholen koennen, statt auf sie zu warten.
+    return finish;
   }
 
+  /**
+   * Fuehrt einen Zug aus.
+   *
+   * Der eigentliche Schutz des Spielzustands steht gleich in den ersten
+   * Zeilen, und er braucht keine Wartezeit: ein Zug wird nur ausgefuehrt,
+   * wenn die Figur der Seite gehoert, die am Zug ist. Nach einem Zug ist das
+   * Zugrecht gewechselt - ein zweiter Zug derselben Seite, ein doppelt
+   * zugestelltes pointerup, ein Zug aus einer Stellung von vorhin: alle
+   * scheitern dort, unabhaengig davon, ob gerade eine Animation laeuft.
+   *
+   * Zusammen damit, dass diese Funktion von der ersten bis zur letzten Zeile
+   * synchron laeuft und sich zwei Aufrufe deshalb nicht verschraenken
+   * koennen, ist der Zustand ohne jede Sperre sicher. Die Sperre unten deckt
+   * nur diesen synchronen Lauf ab.
+   */
   function commitMove(move, interaction={dragged:false}){
     if (moveTransaction) return;
     const piece=getPiece(move.from[0],move.from[1]);
     if(!piece || ChessEngine.colorOf(piece)!==state.turn) return;
+
+    // Der vorige Zug wird sichtbar fertig, bevor dieser gezeichnet wird.
+    settleActiveAnimation();
 
     // Take the snapshot before mutating state so undo remains atomic.
     const previous=snapshot();
@@ -941,44 +996,47 @@
 
     const settings=getInteractionSettings();
     const shouldAnimate=!!settings.pieceAnimationEnabled;
-    moveTransaction={from:move.from,to:move.to,piece,startedAt:performance.now()};
 
-    /* A ceiling on the lock, armed before anything else can throw.
+    /* Die Sperre gilt nur fuer diesen synchronen Lauf.
      *
-     * The transaction is what makes the board ignore the mouse, and the two
-     * timers that normally release it are registered at the very end of this
-     * function - after the render, the DOM work and the animation setup. An
-     * exception anywhere in between left the lock standing with nothing left
-     * to clear it: humanMayAct() answered false from then on, and the board
-     * was dead until the page was reloaded.
-     *
-     * This only ever fires when the ordinary release did not. A move settles
-     * in roughly 460 ms with the default animation, so a lock still standing
-     * after two seconds is a lock nobody is going to lift.
+     * Sie verhindert, dass irgendetwas, was render() ausloest, mitten im Zug
+     * ein zweites commitMove startet. Das `finally` gibt sie in jedem Fall
+     * wieder frei - auch wenn render() wirft. Frueher lag die Freigabe am
+     * Ende der Animation, und eine Ausnahme davor liess sie fuer immer
+     * stehen; das war nur ueber einen Wecker nach zwei Sekunden zu heilen.
+     * Jetzt ist es keine Frage der Zeit mehr, sondern des Kontrollflusses.
      */
-    const lockedTransaction=moveTransaction;
-    window.setTimeout(()=>{
-      if(moveTransaction!==lockedTransaction) return;
-      console.error('Chess move transaction never settled - releasing the board.');
-      moveTransaction=null;
-      for(const square of document.querySelectorAll('.animation-target-hidden')) square.classList.remove('animation-target-hidden');
-      for(const orphan of document.querySelectorAll('.move-animator')) orphan.remove();
+    moveTransaction={from:move.from,to:move.to,piece,startedAt:performance.now()};
+    try{
+      // Render the final logical position exactly once. The moving piece is
+      // hidden only after this render, while a separate compositor-layer copy
+      // performs the visual movement.
       render();
-    },COMMIT_LOCK_CEILING_MS);
-
-    // Render the final logical position exactly once. The moving piece is
-    // hidden only after this render, while a separate compositor-layer copy
-    // performs the visual movement. No render is allowed during the animation.
-    render();
-
-    if(!shouldAnimate){
+      if(shouldAnimate) startMoveAnimation(move,piece,interaction,settings);
+    } finally {
       moveTransaction=null;
-      // The animated path schedules this after the animation finishes; with
-      // animations off there is nothing to wait for.
-      window.setTimeout(afterMoveSettled,0);
-      return;
     }
 
+    /* Wann der naechste Schritt der Partie faellig ist - Premove, dann Engine.
+     *
+     * Das bleibt an die Animationsdauer gebunden, und zwar mit Absicht: es
+     * geht hier nicht mehr um eine Sperre, sondern um Takt. Ein Gegenzug, der
+     * losschlaegt, waehrend die eigene Figur noch fliegt, sieht gehetzt aus.
+     * Der Spieler selbst wartet darauf nicht mehr - er darf ab sofort ziehen.
+     */
+    const settleDelay=shouldAnimate?Math.max(120,(settings.animation?.duration||280)+180)+20:0;
+    window.setTimeout(afterMoveSettled,settleDelay);
+  }
+
+  /**
+   * Laesst die Figuren eines Zuges fliegen und fuehrt Buch darueber.
+   *
+   * Getrennt von commitMove, weil hier nichts mehr ueber die Partie
+   * entschieden wird: der Zustand steht bereits, das Brett zeigt bereits die
+   * Endstellung. Was hier passiert, ist reine Darstellung - und genau deshalb
+   * darf der Spieler waehrenddessen weiterziehen.
+   */
+  function startMoveAnimation(move,piece,interaction,settings){
     // Every square a piece is flying to, not just the mover's. The final
     // position is already painted, so an unhidden destination shows the piece
     // sitting there while its copy is still in the air - which is exactly what
@@ -990,24 +1048,30 @@
       .filter(Boolean);
     for(const square of hidden) square.classList.add('animation-target-hidden');
 
-    let completed=false;
-    const finish=()=>{
-      if(completed)return;
-      completed=true;
-      for(const square of hidden) square.classList.remove('animation-target-hidden');
-      moveTransaction=null;
-      // Do NOT rebuild the board here. The final state was already rendered;
-      // rebuilding here was one of the sources of pointer/render races.
+    let settled=false;
+    const handle={
+      timer:null,
+      stopAnimators:null,
+      settle(){
+        if(settled) return;
+        settled=true;
+        if(handle.timer){window.clearTimeout(handle.timer);handle.timer=null;}
+        for(const square of hidden) square.classList.remove('animation-target-hidden');
+        // Holt die fliegenden Kopien ein. Ruft seinerseits settle() zurueck,
+        // was durch `settled` oben ins Leere laeuft.
+        handle.stopAnimators?.();
+        if(activeAnimation===handle) activeAnimation=null;
+      }
     };
+    activeAnimation=handle;
 
-    animateMove(move,piece,interaction,finish);
+    handle.stopAnimators=animateMove(move,piece,interaction,()=>handle.settle());
 
-    // Hard safety net: a visual animation can never lock gameplay forever,
-    // even if a browser refuses to fire an animation completion callback. The
-    // castling rook starts a beat late, so the net has to outlast that too.
-    const duration=Math.max(120,(settings.animation?.duration||280)+180);
-    window.setTimeout(finish,duration);
-    window.setTimeout(afterMoveSettled,duration+20);
+    // Hard safety net: a visual animation can never leave a square hidden for
+    // ever, even if a browser refuses to fire an animation completion
+    // callback. The castling rook starts a beat late, so the net has to
+    // outlast that too.
+    handle.timer=window.setTimeout(()=>handle.settle(),Math.max(120,(settings.animation?.duration||280)+180));
   }
 
   /**
@@ -1175,6 +1239,9 @@
    */
   function goToPly(target){
     if(moveTransaction||pendingPromotion) return;
+    // Eine noch fliegende Figur gehoert zu der Stellung, die gerade verlassen
+    // wird. Sie wird eingeholt, statt das Blaettern zu verbieten.
+    settleActiveAnimation();
     const clamped=Math.max(0,Math.min(target,movesLog.length));
     if(clamped===viewPly) return;
     viewPly=clamped;
@@ -1533,6 +1600,7 @@
 
   function newGame(){
     if(moveTransaction)return;
+    settleActiveAnimation();
     if(onlineMode){
       onlineMode=null;
       if(onlineCard) onlineCard.hidden=true;
@@ -1568,6 +1636,7 @@
   }
   function undo(){
     if(moveTransaction)return;
+    settleActiveAnimation();
     if(!history.length)return;
     // Cancel any search in flight so its result cannot land on the restored
     // position after the take-back.
@@ -2117,6 +2186,7 @@
    * and a loaded position end up in exactly the same shape.
    */
   function loadGame(startFen,plies,finished=null){
+    settleActiveAnimation();
     aiGeneration++;
     evalGeneration++;
     setThinking(false);
