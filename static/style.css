@@ -1,3 +1,28 @@
+/* ===================================================================== *
+ * Wie diese Datei gelesen wird
+ * ===================================================================== *
+ *
+ * Sie hat zwei Schichten, und das ist Absicht:
+ *
+ *   1. Der gewachsene Bestand (oben, bis zur Marke "DESIGNSYSTEM").
+ *      Farbtokens, Brett, Figuren, Dialoge, Training, Online, Archiv,
+ *      Analyse. Hier steht alles, was seit Langem funktioniert.
+ *
+ *   2. Das Designsystem (unten, ab der Marke).
+ *      Abstands-, Schrift-, Radius- und Tiefenskala; Huelle, Kopfzeile,
+ *      Seitenleiste, Knoepfe, Typografie, Browser-Oberflaechen, Umbrueche.
+ *      Diese Schicht ist fuer diese Bereiche die zustaendige Stelle.
+ *
+ * Wo man etwas aendert: Layout, Knoepfe, Kopfzeile, Seitenleiste, Skalen -
+ * in Schicht 2. Brett, Figuren, Dialoge, Modi - in Schicht 1.
+ *
+ * Warum nicht zusammengelegt: die Reihenfolge entscheidet hier an vielen
+ * Stellen, welche Regel gewinnt. Umsortieren waere kein Aufraeumen, sondern
+ * eine unsichtbare Verhaltensaenderung. Was sich gefahrlos streichen liess -
+ * Regeln, die nichts mehr treffen koennen, und Regeln, die eine spaetere
+ * Fassung vollstaendig ersetzt - ist bereits weg.
+ */
+
 * { box-sizing: border-box; }
 
 /* ===================================================================== *
@@ -18,8 +43,6 @@
 
     --bg-1: #0a1220;
     --bg-2: #14202f;
-    --bg-glow-1: rgba(87, 113, 165, .22);
-    --bg-glow-2: rgba(53, 81, 127, .16);
 
     --panel: rgba(18, 27, 42, .92);
     --panel-strong: rgba(12, 19, 31, .96);
@@ -43,7 +66,6 @@
     /* Modal backdrop. Stays dark in both themes: a pale scrim over a pale
        page does not read as "the page behind is inactive". */
     --scrim: rgba(3, 7, 13, .78);
-    --shadow-sm: 0 2px 6px rgba(0, 0, 0, .25);
     --shadow-md: 0 12px 28px rgba(0, 0, 0, .32);
     --shadow-lg: 0 26px 60px rgba(0, 0, 0, .5);
 
@@ -87,7 +109,6 @@
 
     --radius-sm: 9px;
     --radius: 13px;
-    --radius-lg: 18px;
     --gap: 12px;
 }
 
@@ -98,8 +119,6 @@
 
     --bg-1: #f3f6fb;
     --bg-2: #e3eaf4;
-    --bg-glow-1: rgba(120, 150, 205, .18);
-    --bg-glow-2: rgba(150, 175, 215, .14);
 
     --panel: rgba(255, 255, 255, .84);
     --panel-strong: rgba(255, 255, 255, .96);
@@ -121,7 +140,6 @@
     --ink-4: rgba(22, 32, 46, .4);
 
     --scrim: rgba(18, 28, 44, .55);
-    --shadow-sm: 0 2px 6px rgba(30, 45, 70, .08);
     --shadow-md: 0 12px 28px rgba(30, 45, 70, .12);
     --shadow-lg: 0 24px 55px rgba(30, 45, 70, .18);
 
@@ -156,8 +174,6 @@
 
         --bg-1: #f3f6fb;
         --bg-2: #e3eaf4;
-        --bg-glow-1: rgba(120, 150, 205, .18);
-        --bg-glow-2: rgba(150, 175, 215, .14);
 
         --panel: rgba(255, 255, 255, .84);
         --panel-strong: rgba(255, 255, 255, .96);
@@ -179,7 +195,6 @@
         --ink-4: rgba(22, 32, 46, .4);
 
         --scrim: rgba(18, 28, 44, .55);
-    --shadow-sm: 0 2px 6px rgba(30, 45, 70, .08);
         --shadow-md: 0 12px 28px rgba(30, 45, 70, .12);
         --shadow-lg: 0 24px 55px rgba(30, 45, 70, .18);
 
@@ -192,8 +207,6 @@
         --field: #ffffff;
         --field-line: rgba(16, 28, 45, .18);
 
-        --avatar-light: #ffffff;
-        --avatar-dark: #2a2d33;
 
         --tone-brilliant: #128577;
         --tone-great: #2b6fa8;
@@ -237,16 +250,7 @@ button { font: inherit; }
     background: rgba(12, 19, 30, 0.76);
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
     backdrop-filter: blur(12px);
-}
-
-.game-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    gap: clamp(20px, 3vw, 38px);
-    align-items: center;
-}
-
-.board-area {
+}.board-area {
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -277,12 +281,7 @@ button { font: inherit; }
 }
 
 .white-avatar { color: var(--avatar-white-ink); background: var(--avatar-white-bg); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
-.black-avatar { color: var(--avatar-black-ink); background: var(--avatar-black-bg); text-shadow: 0 1px 0 rgba(255,255,255,.5); }
-
-.player-name { font-weight: 700; font-size: 1rem; }
-.player-sub { color: var(--ink-3); font-size: 0.76rem; margin-top: 2px; }
-
-.clock {
+.black-avatar { color: var(--avatar-black-ink); background: var(--avatar-black-bg); text-shadow: 0 1px 0 rgba(255,255,255,.5); }.clock {
     min-width: 76px;
     text-align: center;
     padding: 8px 10px;
@@ -496,32 +495,12 @@ button { font: inherit; }
     font-size: clamp(.72rem, 1vw, .9rem);
 }
 .file-labels span { grid-column: span 1; text-align: center; }
-.file-labels span:first-child { visibility: hidden; }
-
-.side-panel {
-    display: grid;
-    gap: 14px;
-}
-
-.status-card, .moves-card, .help-text {
+.file-labels span:first-child { visibility: hidden; }.status-card, .moves-card, .help-text {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 15px;
     box-shadow: 0 12px 30px rgba(0,0,0,.18);
-}
-
-.status-card { padding: 18px; }
-.status-kicker { font-size: .68rem; letter-spacing: .16em; color: var(--ink-3); font-weight: 800; }
-.status-main { font-size: 1.3rem; font-weight: 800; margin-top: 6px; }
-.status-extra { color: var(--ink-3); font-size: .83rem; margin-top: 5px; min-height: 20px; }
-.status-card.check-state .status-main { color: var(--state-check); }
-.status-card.game-over .status-main { color: var(--state-over); }
-
-.moves-card { min-height: 280px; overflow: hidden; }
-.card-heading { display:flex; justify-content: space-between; align-items:center; padding: 16px 17px; border-bottom: 1px solid var(--line); }
-.card-heading h2 { margin:0; font-size:.95rem; }
-.card-heading span { color: var(--ink-3); font-size:.8rem; }
-.moves-list { max-height: 430px; overflow:auto; padding: 8px; }
+}.status-extra { color: var(--ink-3); font-size: .83rem; margin-top: 5px; min-height: 20px; }.moves-card { min-height: 280px; overflow: hidden; }.moves-list { max-height: 430px; overflow:auto; padding: 8px; }
 .empty-moves { color: var(--ink-3); font-size: .84rem; padding: 14px 9px; }
 .move-row { display:grid; grid-template-columns: 34px 1fr 1fr; gap: 6px; align-items:center; padding: 7px 9px; border-radius: 8px; font-size: .86rem; }
 .move-row:nth-child(odd) { background: var(--layer-1); }
@@ -531,14 +510,7 @@ button { font: inherit; }
 
 .action-button { border-radius: 10px; padding: 12px 10px; border: 1px solid var(--line); cursor:pointer; color:var(--ink); font-weight:750; transition:.16s ease; }
 .action-button:hover:not(:disabled) { transform: translateY(-1px); }
-.action-button:disabled { opacity:.4; cursor:not-allowed; }
-.action-button.secondary { background: var(--layer-2); }
-.action-button.primary { background: var(--accent-soft); border-color: var(--accent-line); }
-
-.help-text { padding: 13px 15px; color: var(--ink-3); font-size: .78rem; line-height: 1.5; }
-.help-text strong { color: var(--ink); }
-
-.promotion-overlay { position: fixed; inset:0; display:grid; place-items:center; background: var(--scrim); backdrop-filter: blur(5px); z-index:120; }
+.action-button:disabled { opacity:.4; cursor:not-allowed; }.promotion-overlay { position: fixed; inset:0; display:grid; place-items:center; background: var(--scrim); backdrop-filter: blur(5px); z-index:120; }
 .promotion-modal { width:min(92vw,420px); padding:24px; border-radius:18px; background:var(--panel-strong); border:1px solid var(--line); box-shadow:0 24px 70px rgba(0,0,0,.5); }
 .promotion-kicker { color:var(--ink-3); font-size:.68rem; letter-spacing:.16em; font-weight:800; }
 .promotion-modal h2 { margin:7px 0 18px; font-size:1.35rem; }
@@ -557,9 +529,7 @@ button { font: inherit; }
 @media (max-width: 700px) {
     .app-shell { padding: 8px; }
     .game-card { width: 100%; padding: 10px; border-radius: 16px; }
-    .game-layout { gap: 10px; }
-    .player-sub { display:none; }
-    .player-strip { width:100%; }
+    .game-layout { gap: 10px; }    .player-strip { width:100%; }
     .board-row { grid-template-columns: 23px minmax(0,1fr); gap: 6px; }
     .board-frame { width: min(88vw, 640px); }
     .file-labels { width: calc(min(88vw, 640px) + 29px); grid-template-columns:23px repeat(8,1fr); column-gap:6px; }
@@ -594,7 +564,7 @@ button { font: inherit; }
 .style-card { min-width:0; border:1px solid var(--line); border-radius:12px; background:var(--layer-1); color:var(--ink); padding:8px; cursor:pointer; text-align:left; transition:transform .14s ease,border-color .14s ease,background .14s ease; }
 .style-card:hover { transform:translateY(-1px); border-color:var(--line-strong); background:var(--layer-3); }
 .style-card.active { border-color:var(--accent-line); box-shadow:0 0 0 2px var(--accent-soft); }
-.style-preview { display:block; width:100%; aspect-ratio:1.45; border-radius:8px; overflow:hidden; background:#202a3a; }
+.style-preview { display:block; width:100%; aspect-ratio:1.45; border-radius:8px; overflow:hidden; background:var(--board-frame); }
 .board-preview { background-position:center; background-repeat:no-repeat; }
 /* Two halves, one light square and one dark, so both colours of the set are
    shown on the ground they will actually stand on. A single dark panel hid
@@ -665,9 +635,7 @@ button { font: inherit; }
 .drag-ghost { position:fixed; left:0; top:0; z-index:100; width:var(--piece-size,72px); height:var(--piece-size,72px); display:grid; place-items:center; pointer-events:none; transform:translate3d(-1000px,-1000px,0); will-change:transform; backface-visibility:hidden; contain:layout paint; }
 .drag-ghost img { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 5px 7px rgba(0,0,0,.28)); }
 .piece-dragging { cursor:grabbing !important; }
-.square.drag-source-hidden .piece { visibility:hidden; }
-.square.animation-source-hidden .piece { visibility:hidden; }
-.square.animation-target-hidden .piece { visibility:hidden; }
+.square.drag-source-hidden .piece { visibility:hidden; }.square.animation-target-hidden .piece { visibility:hidden; }
 .move-animator { position:fixed; left:0; top:0; z-index:90; display:grid; place-items:center; pointer-events:none; will-change:transform; backface-visibility:hidden; contain:layout paint; }
 .move-animator img { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 3px 4px rgba(0,0,0,.2)); }
 .move-animator.arcade { filter:saturate(1.12); }
@@ -764,15 +732,7 @@ button { font: inherit; }
     fill: none;
     stroke: rgba(255, 170, 60, .85);
     stroke-width: 1;
-}
-
-/* ===================================================================== *
- * Captured pieces
- * ===================================================================== */
-
-.player-identity { min-width: 0; }
-
-.captured-row {
+}.captured-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -836,17 +796,7 @@ button { font: inherit; }
 .move-link.tone-neutral .move-mark   { color: var(--ink-3); }
 .move-link.tone-warn .move-mark      { color: var(--tone-warn); }
 .move-link.tone-bad .move-mark       { color: var(--tone-bad); }
-.move-link.tone-worst .move-mark     { color: var(--danger); }
-
-.move-nav {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 5px;
-    padding: 8px;
-    border-top: 1px solid var(--line);
-}
-
-.nav-button {
+.move-link.tone-worst .move-mark     { color: var(--danger); }.nav-button {
     padding: 7px 0;
     border-radius: 8px;
     border: 1px solid var(--line);
@@ -1153,35 +1103,7 @@ html.ai-thinking.premove-possible .square { cursor: default; }
 }
 
 .site-footer a { color: var(--ink-2); }
-.site-footer a:hover { color: var(--ink); }
-
-/* ===================================================================== *
- * Side panel: grouped actions (layout B)
- * ===================================================================== *
- * Ten buttons used to sit in three rows of four inside a 340px panel, which
- * left 78px per button - "Einstellungen" needs 111px and spilled out of its
- * own border. Two columns give 166px, and the group headings replace the
- * guessing about what a button does.
- */
-
-/* Dialogs use .action-row too; the panel overrides it below. */
-.action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-.action-groups {
-    display: grid;
-    gap: 14px;
-}
-
-.action-group-label {
-    margin: 0 0 7px 2px;
-    font-size: .64rem;
-    font-weight: 800;
-    letter-spacing: .11em;
-    text-transform: uppercase;
-    color: var(--ink-4);
-}
-
-.side-panel .action-row {
+.site-footer a:hover { color: var(--ink); }.side-panel .action-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -1207,26 +1129,10 @@ html.ai-thinking.premove-possible .square { cursor: default; }
     width: 100%;
     padding: 13px;
     font-size: .86rem;
-}
-
-/* ===================================================================== *
- * Panel rhythm
- * ===================================================================== */
-
-.side-panel { gap: var(--gap); align-content: start; }
-
-.status-card, .moves-card, .review-card, .help-text, .opening-name {
+}.status-card, .moves-card, .review-card, .help-text, .opening-name {
     border-radius: var(--radius);
-}
-
-.status-card { padding: 15px 17px; }
-.status-kicker { font-size: .6rem; letter-spacing: .14em; color: var(--ink-4); }
-.status-main { font-size: 1.06rem; margin-top: 3px; }
-.status-extra { margin-top: 4px; font-size: .76rem; color: var(--ink-3); line-height: 1.5; }
-
-.moves-list { max-height: min(38vh, 340px); }
-
-/* ===================================================================== *
+}.status-main { font-size: 1.06rem; margin-top: 3px; }
+.status-extra { margin-top: 4px; font-size: .76rem; color: var(--ink-3); line-height: 1.5; }/* ===================================================================== *
  * Light theme corrections
  * ===================================================================== *
  * A few surfaces were built assuming a dark ground and need a nudge rather
@@ -1242,26 +1148,9 @@ html.ai-thinking.premove-possible .square { cursor: default; }
     :root:not([data-theme="light"]) .game-card { background: rgba(12, 19, 30, .76); }
 }
 
-:root[data-theme="dark"] .game-card { background: rgba(12, 19, 30, .76); }
-
-/* The board frame is a physical edge around the squares, so it stays a shade
-   darker than the surface it sits on in both themes. */
-.board-frame { box-shadow: var(--shadow-md), inset 0 0 0 1px var(--line-faint); }
-
-/* The drag ghost and the animated piece float above everything; their shadow
+:root[data-theme="dark"] .game-card { background: rgba(12, 19, 30, .76); }/* The drag ghost and the animated piece float above everything; their shadow
    has to read on a pale page too. */
-.drag-ghost img, .move-animator img { filter: drop-shadow(0 6px 10px rgba(20, 30, 45, .35)); }
-
-/* The primary action carries the accent as a fill, not a tint: at 13% alpha on
-   a white panel it read as just another secondary button. */
-.action-button.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-}
-.action-button.primary:hover:not(:disabled) { filter: brightness(1.08); }
-
-/* A captured piece shrinks away on the square it stood on. Without it a
+.drag-ghost img, .move-animator img { filter: drop-shadow(0 6px 10px rgba(20, 30, 45, .35)); }/* A captured piece shrinks away on the square it stood on. Without it a
    capture is the one move where something simply blinks out of existence
    between two frames. */
 .move-animator.captured { z-index: 88; }
@@ -1520,10 +1409,7 @@ body { --mode-accent: var(--accent-line); }
 body[data-mode="puzzle"] { --mode-accent: var(--tone-great); }
 body[data-mode="online"] { --mode-accent: var(--tone-brilliant); }
 
-.puzzle-card, .online-card { border-left-color: var(--mode-accent); }
-.puzzle-card .status-kicker, .online-card .status-kicker { color: var(--mode-accent); }
-
-/* --- Training ----------------------------------------------------------- */
+.puzzle-card, .online-card { border-left-color: var(--mode-accent); }/* --- Training ----------------------------------------------------------- */
 body[data-mode="puzzle"] .status-card,
 body[data-mode="puzzle"] .opening-name,
 body[data-mode="puzzle"] .review-card,
@@ -1586,33 +1472,815 @@ body[data-mode="online"] .mode-help.for-online { display: block; }
     cursor: pointer;
     text-align: left;
     transition: background .15s ease, color .15s ease, box-shadow .15s ease;
-}
-
-.mode-tab:hover { background: var(--layer-2); color: var(--ink-2); }
-.mode-tab:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
-
-.mode-tab-icon { font-size: 1.15rem; line-height: 1; flex: none; }
-.mode-tab-text { display: grid; gap: 1px; min-width: 0; }
-.mode-tab-text strong { font-size: .92rem; font-weight: 800; color: inherit; }
-.mode-tab-text small {
-    font-size: .7rem;
-    color: var(--ink-4);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.mode-tab.active {
-    color: var(--ink);
-    background: var(--layer-2);
-    box-shadow: inset 0 -3px 0 var(--mode-accent);
-}
-.mode-tab.active .mode-tab-text small { color: var(--ink-3); }
-
-/* Auf schmalen Schirmen tragen die Beschriftungen nicht mehr - das Symbol
+}.mode-tab:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }/* Auf schmalen Schirmen tragen die Beschriftungen nicht mehr - das Symbol
    und das eine Wort reichen. */
 @media (max-width: 760px) {
     .mode-bar { gap: 6px; }
-    .mode-tab { padding: 9px 10px; justify-content: center; }
-    .mode-tab-text small { display: none; }
+    .mode-tab { padding: 9px 10px; justify-content: center; }}
+
+/* ===================================================================== *
+ * DESIGNSYSTEM - Stufe 5
+ * ===================================================================== *
+ *
+ * Diese Sektion ist die maessgebliche Schicht fuer Huelle, Kopfzeile,
+ * Seitenleiste, Knoepfe und Typografie. Sie steht bewusst am Ende: die Datei
+ * davor ist ueber Monate gewachsen und deklariert mehrere dieser Dinge
+ * zweimal - .action-button an vier Stellen, .side-panel an zwei. Statt diese
+ * Historie zu zerschneiden und dabei Regeln zu treffen, die anderswo noch
+ * gebraucht werden, gewinnt hier eine einzige, zusammenhaengende Schicht.
+ *
+ * Was gemessen war und hier behoben wird:
+ *   - 19 Schriftgroesse/Gewicht-Kombinationen, die meisten in krummen Werten
+ *     wie 14,4 oder 10,24 px. Ursache: kaskadierende `em`-Angaben. Hier
+ *     stehen feste Stufen, die sich nicht multiplizieren.
+ *   - 11 verschiedene Schatten, mindestens 8 Radien. Hier drei und drei.
+ *   - Die Seite war auf jeder Breite hoeher als der Bildschirm; ab 1024 px
+ *     rutschte die Seitenleiste unter das Brett und war beim Spielen nicht
+ *     mehr zu sehen. Das Brett bemisst sich jetzt an der Bildhoehe.
+ *
+ * Die Farbtokens oben bleiben unangetastet - sie waren schon sauber, in Hell
+ * und Dunkel gepflegt, und appearance.js besitzt die Brettfarben.
+ */
+
+:root {
+    /* Abstaende: eine Vierer-Schrittfolge, mehr braucht kein Layout. */
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 24px;
+    --s6: 32px;
+
+    /* Schrift: feste Stufen in px. Kein `em`, damit sich nichts multipliziert. */
+    --t-2xs: 11px;
+    --t-xs: 12px;
+    --t-sm: 13px;
+    --t-base: 14px;
+    --t-md: 16px;
+    --t-lg: 19px;
+
+    --lh-tight: 1.2;
+    --lh-base: 1.5;
+    --lh-loose: 1.65;
+
+    /* Versalien-Label brauchen Laufweite, damit sie nicht als Block lesen. */
+    --track-label: .07em;
+
+    /* Zwei Radien, nach Rolle: Steuerelement und Flaeche. Die Dialoge tragen
+       weiterhin ihren eigenen, aelteren Radius - den anzugleichen waere eine
+       sichtbare Aenderung und gehoert nicht in einen Aufraeumschritt. */
+    --r-control: 8px;
+    --r-panel: 12px;
+
+    /* Zwei Tiefen, jede mit Versatz und weichem Verlauf - ein Schein ohne
+       Versatz ist Dekoration, kein Licht. Die Dialoge benutzen noch den
+       aelteren --shadow-lg; ein Wechsel waere sichtbar. */
+    --e-raise: 0 1px 2px rgba(0, 0, 0, .28);
+    --e-panel: 0 4px 16px rgba(0, 0, 0, .22);
+
+    --ease: cubic-bezier(.2, .7, .3, 1);
+    --dur-fast: 110ms;
+    --dur: 170ms;
+
+    /* Layoutmasse. Die Kopfzeile ist fix, damit sich das Brett an ihr
+       ausrichten kann, ohne sie zu messen. */
+    --header-h: 56px;
+    --panel-w: 360px;
+    --shell-pad: var(--s5);
+    /* Was ueber und unter dem Brett noch Platz braucht: zwei Spielerzeilen,
+       die Linienbeschriftung und die Abstaende dazwischen. */
+    --board-chrome: 140px;
+    /* Die Reihenbeschriftung links vom Brett: 34 px Spalte plus 10 px
+       Abstand. Wer hier zu wenig ansetzt, laesst die Brettspalte genau um
+       die Differenz ueber den Rand ragen. */
+    --rank-gutter: 44px;
 }
+
+:root[data-theme="light"],
+:root:not([data-theme="dark"]) {
+    --e-raise: 0 1px 2px rgba(30, 45, 70, .10);
+    --e-panel: 0 4px 16px rgba(30, 45, 70, .10);
+}
+:root[data-theme="dark"] {
+    --e-raise: 0 1px 2px rgba(0, 0, 0, .28);
+    --e-panel: 0 4px 16px rgba(0, 0, 0, .22);
+}
+
+/* --------------------------------------------------------------------- *
+ * Browser-Oberflaechen
+ * --------------------------------------------------------------------- *
+ * Markierung, Bildlaufleiste und Fokusring liefert der Browser sonst in
+ * seinen eigenen Farben - und die gehoeren zu keinem Designsystem. */
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--layer-4) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: var(--layer-4);
+    border-radius: 99px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--layer-5); background-clip: content-box; }
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--r-control);
+}
+
+.skip-link {
+    position: fixed;
+    top: var(--s2);
+    left: var(--s2);
+    z-index: 200;
+    padding: var(--s2) var(--s4);
+    background: var(--panel-strong);
+    color: var(--ink);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-control);
+    font-size: var(--t-base);
+    font-weight: 600;
+    text-decoration: none;
+    transform: translateY(-200%);
+    transition: transform var(--dur) var(--ease);
+}
+.skip-link:focus-visible { transform: translateY(0); }
+
+/* --------------------------------------------------------------------- *
+ * Icons
+ * --------------------------------------------------------------------- */
+
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.icon {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* --------------------------------------------------------------------- *
+ * Typografie
+ * --------------------------------------------------------------------- */
+
+body {
+    font-size: var(--t-base);
+    line-height: var(--lh-base);
+    /* Ziffern in Zugliste, Uhr und Bewertung stehen untereinander. */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { text-wrap: balance; }
+
+/* --------------------------------------------------------------------- *
+ * Kopfzeile
+ * --------------------------------------------------------------------- */
+
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    height: var(--header-h);
+    background: color-mix(in srgb, var(--bg-1) 86%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+}
+
+.app-header-inner {
+    height: 100%;
+    max-width: 1760px;
+    margin: 0 auto;
+    padding: 0 var(--s5);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--s5);
+}
+
+.wordmark {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    margin: 0;
+    font-size: var(--t-md);
+    font-weight: 650;
+    letter-spacing: -.01em;
+    color: var(--ink);
+    white-space: nowrap;
+}
+.wordmark-icon { width: 20px; height: 20px; color: var(--accent); }
+
+.mode-bar {
+    display: flex;
+    justify-self: center;
+    gap: var(--s1);
+    padding: var(--s1);
+    background: var(--layer-1);
+    border: 1px solid var(--line-faint);
+    border-radius: 99px;
+}
+
+.mode-tab {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: var(--s2) var(--s4);
+    border: 0;
+    border-radius: 99px;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: var(--t-base);
+    font-weight: 550;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.mode-tab:hover { color: var(--ink-2); background: var(--layer-2); }
+.mode-tab.active {
+    background: var(--layer-3);
+    color: var(--ink);
+    box-shadow: var(--e-raise);
+}
+/* Der aktive Zustand haengt nicht allein an der Farbe: das Icon traegt die
+   Akzentfarbe UND das Gewicht steigt, damit er auch ohne Farbsehen lesbar
+   bleibt. */
+.mode-tab.active { font-weight: 650; }
+.mode-tab.active .icon { color: var(--accent); }
+
+.header-tools { display: flex; gap: var(--s1); }
+
+/* --------------------------------------------------------------------- *
+ * Huelle und Hauptlayout
+ * --------------------------------------------------------------------- */
+
+.app-shell {
+    min-height: auto;
+    display: block;
+    padding: var(--shell-pad);
+    max-width: 1760px;
+    margin: 0 auto;
+}
+
+/* Die aeussere Karte war eine Karte um alles herum - eine Flaeche, die
+   nichts gruppiert. Sie traegt jetzt nur noch das Raster. */
+.game-card {
+    width: auto;
+    max-width: none;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.game-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--panel-w);
+    align-items: start;
+    gap: var(--s6);
+}
+
+.board-area {
+    display: grid;
+    gap: var(--s3);
+    justify-items: center;
+    min-width: 0;
+    /* Hier und nicht am Rahmen, damit die Spielerzeilen dasselbe Mass
+       erben und buendig mit dem Brett stehen statt mit der Spalte. */
+    --board-size: min(
+        calc(100vw - var(--panel-w) - var(--rank-gutter) - 2 * var(--shell-pad) - var(--s6) - var(--s2)),
+        calc(100vh - var(--header-h) - 2 * var(--shell-pad) - var(--board-chrome))
+    );
+}
+
+/* Die eigentliche Korrektur: das Brett bemisst sich an dem, was tatsaechlich
+   frei ist - in der Breite wie in der Hoehe. Vorher richtete es sich allein
+   nach der Breite und lief auf einem 1280x800-Schirm unten aus dem Bild. */
+.board-frame {
+    width: var(--board-size);
+    height: var(--board-size);
+    aspect-ratio: 1;
+    border-radius: var(--r-panel);
+    box-shadow: var(--e-panel), inset 0 0 0 1px var(--line-faint);
+}
+
+.board-with-eval { justify-content: center; }
+.board-column { align-items: center; }
+.board-row { align-items: start; }
+
+.rank-labels, .file-labels { color: var(--ink-4); font-size: var(--t-xs); font-weight: 500; }
+
+/* Die Beschriftungen richteten sich nach einer eigenen, fest verdrahteten
+   Formel (`min(78vmin, 780px) + 44px`). Die stammt aus der Zeit, als das
+   Brett allein nach der Breite bemessen wurde - seit es auch die Hoehe
+   beruecksichtigt, war die Linienzeile breiter als das Brett darueber und
+   schob die ganze Spalte ueber den Rand. Jetzt teilen sich beide ein Mass. */
+.board-column { width: min(calc(var(--board-size) + var(--rank-gutter)), 100%); }
+.file-labels {
+    width: 100%;
+    grid-template-columns: 34px repeat(8, 1fr);
+    column-gap: 10px;
+}
+.rank-labels { height: var(--board-size); }
+
+/* --------------------------------------------------------------------- *
+ * Spielerzeilen
+ * --------------------------------------------------------------------- */
+
+.player-strip {
+    /* Buendig mit dem Brett, nicht mit der Spalte. Die Zeile bekommt die
+       volle Spaltenbreite und schiebt ihren Inhalt um die Rinne der
+       Reihenbeschriftung nach rechts - sonst steht der Name 25 px links
+       neben dem Brett und die ganze Spalte wirkt schief. */
+    width: min(calc(var(--board-size, 100%) + var(--rank-gutter)), 100%);
+    padding-left: var(--rank-gutter);
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: 0;
+    background: none;
+    border: 0;
+    min-height: 34px;
+}.player-identity { min-width: 0; }
+.player-name { font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.captured-row { display: flex; flex-wrap: wrap; min-width: 0; }
+.player-avatar {
+    width: 30px; height: 30px;
+    display: grid; place-items: center;
+    border-radius: var(--r-control);
+    font-size: var(--t-md);
+    line-height: 1;
+}
+.clock {
+    margin-left: auto;
+    padding: var(--s1) var(--s3);
+    border-radius: var(--r-control);
+    background: var(--layer-2);
+    border: 1px solid var(--line-faint);
+    font-size: var(--t-base);
+    font-weight: 600;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------- *
+ * Seitenleiste
+ * --------------------------------------------------------------------- */
+
+.side-panel {
+    position: sticky;
+    top: calc(var(--header-h) + var(--shell-pad));
+    display: grid;
+    /* Ausdruecklich einspaltig. Der Altbestand deklariert die Leiste weiter
+       oben zweispaltig; dadurch bekam jede Gruppe nur die halbe Breite, und
+       in einer 300 px schmalen Leiste blieben 67 px pro Knopf uebrig - genau
+       die Stelle, an der "PGN & FEN" nicht mehr hineinpasste. */
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: var(--s3);
+    width: 100%;
+    min-width: 0;
+    max-height: calc(100vh - var(--header-h) - 2 * var(--shell-pad));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: var(--s1);
+}
+
+/* Eine Ebene Flaeche, nicht drei. Karten in Karten waren der Grund, warum
+   nichts mehr hervorstach. */
+.status-card,
+.moves-card,
+.review-card,
+.help-text,
+.opening-name,
+.online-card,
+.puzzle-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+    box-shadow: none;
+    min-width: 0;
+}
+
+/* Die Statuskarte ist das einzige, was hervorgehoben gehoert: sie beantwortet
+   die Frage, die man beim Blick aufs Brett stellt. */
+.status-card {
+    padding: var(--s4);
+    background: var(--panel-strong);
+    box-shadow: var(--e-raise);
+}
+.status-main {
+    font-size: var(--t-lg);
+    font-weight: 600;
+    line-height: var(--lh-tight);
+    letter-spacing: -.01em;
+    color: var(--ink);
+    margin-bottom: var(--s1);
+}
+.status-extra {
+    font-size: var(--t-sm);
+    line-height: var(--lh-base);
+    color: var(--ink-3);
+    /* Laengere Hinweise brechen um, statt den Kasten zu sprengen. */
+    overflow-wrap: anywhere;
+}
+/* Der Zustand haengt nicht allein an der Farbe: die Kante der Karte markiert
+   ihn mit. Die Ueberschrift bleibt dabei in normaler Schriftfarbe - sie sagt,
+   wer am Zug ist, und das aendert sich durch ein Schach nicht. Rot gehoert
+   auf die Zeile, die das Schach tatsaechlich meldet. */
+.status-card.check-state { border-color: color-mix(in srgb, var(--state-check) 55%, var(--line)); }
+.status-card.game-over { border-color: color-mix(in srgb, var(--state-over) 55%, var(--line)); }
+.status-card.check-state .status-main { color: var(--ink); }
+.status-card.check-state .status-extra { color: var(--state-check); font-weight: 600; }
+.status-card.game-over .status-main { color: var(--state-over); }
+
+/* Leere Platzhalter sehen nach unfertig aus. Ohne laufende Uhr steht dort
+   nichts - der Platz gehoert erst wieder her, wenn eine Zeit laeuft. */
+.clock.placeholder-clock { display: none; }
+
+.card-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s3);
+    padding: var(--s3) var(--s4);
+    border-bottom: 1px solid var(--line-faint);
+}
+.card-heading h2 {
+    margin: 0;
+    font-size: var(--t-2xs);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--ink-3);
+}
+.card-heading span { font-size: var(--t-xs); color: var(--ink-4); }
+
+.moves-card { min-height: 0; display: grid; grid-template-rows: auto 1fr auto; }
+.moves-list { min-height: 132px; max-height: 30vh; overflow-y: auto; padding: var(--s2); }
+
+.move-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--s1);
+    padding: var(--s2);
+    border-top: 1px solid var(--line-faint);
+}
+
+.help-text {
+    padding: var(--s3) var(--s4);
+    color: var(--ink-3);
+    font-size: var(--t-xs);
+    line-height: var(--lh-loose);
+    background: none;
+    border-color: var(--line-faint);
+}
+.help-text strong { color: var(--ink-2); font-weight: 600; }
+
+.action-groups { display: grid; gap: var(--s2); }
+.action-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.side-panel .action-row { grid-template-columns: 1fr 1fr; }
+.side-panel .action-button.wide,
+.action-button.new-game { grid-column: 1 / -1; }
+
+/* --------------------------------------------------------------------- *
+ * Knoepfe - ein System, fuenf Rollen, fuenf Zustaende
+ * --------------------------------------------------------------------- */
+
+.action-button,
+.nav-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s2);
+    min-height: 38px;
+    padding: var(--s2) var(--s3);
+    border: 1px solid transparent;
+    border-radius: var(--r-control);
+    background: var(--layer-2);
+    color: var(--ink-2);
+    font-size: var(--t-base);
+    font-weight: 550;
+    line-height: 1.2;
+    text-align: center;
+    cursor: pointer;
+    /* Beschriftungen brechen um, statt abgeschnitten zu werden. */
+    white-space: normal;
+    overflow-wrap: anywhere;
+    transition: background var(--dur-fast) var(--ease),
+                border-color var(--dur-fast) var(--ease),
+                color var(--dur-fast) var(--ease);
+}
+
+.action-button:hover:not(:disabled),
+.nav-button:hover:not(:disabled) {
+    background: var(--layer-3);
+    color: var(--ink);
+    /* Kein Anheben mehr: ein Knopf, der bei jeder Mausbewegung springt, ist
+       unruhig, und auf einem Raster verschiebt er die Nachbarn optisch. */
+    transform: none;
+}
+.action-button:active:not(:disabled),
+.nav-button:active:not(:disabled) { background: var(--layer-4); }
+
+.action-button:disabled,
+.nav-button:disabled {
+    opacity: .38;
+    cursor: not-allowed;
+    background: var(--layer-1);
+}
+
+.action-button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 650;
+    min-height: 42px;
+    box-shadow: var(--e-raise);
+}
+.action-button.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 88%, #fff);
+    border-color: color-mix(in srgb, var(--accent) 88%, #fff);
+    color: #fff;
+    filter: none;
+}
+.action-button.primary:active:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 82%, var(--bg-1));
+}
+
+.action-button.secondary { background: var(--layer-2); border-color: var(--line-faint); }
+.action-button.secondary:hover:not(:disabled) { background: var(--layer-3); border-color: var(--line); }
+
+.action-button.ghost { background: transparent; border-color: transparent; color: var(--ink-3); }
+.action-button.ghost:hover:not(:disabled) { background: var(--layer-2); color: var(--ink); }
+
+.action-button.danger { background: transparent; border-color: transparent; color: var(--ink-3); }
+.action-button.danger:hover:not(:disabled) {
+    background: var(--danger-soft);
+    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+    color: var(--danger);
+}
+
+.action-button.icon-only {
+    min-height: 36px;
+    width: 36px;
+    padding: 0;
+    background: transparent;
+    border-color: transparent;
+    color: var(--ink-3);
+}
+.action-button.icon-only:hover:not(:disabled) { background: var(--layer-2); color: var(--ink); }
+
+.nav-button { min-height: 32px; padding: 0; color: var(--ink-3); background: var(--layer-1); }
+.nav-button .icon { width: 16px; height: 16px; }
+
+/* --------------------------------------------------------------------- *
+ * Zugliste
+ * --------------------------------------------------------------------- */
+
+.move-cell {
+    font-size: var(--t-base);
+    font-variant-numeric: tabular-nums;
+    border-radius: var(--r-control);
+}
+/* Der laufende Zug war mit Rahmen und heller Flaeche markiert und sah damit
+   aus wie ein Eingabefeld, in das man tippen koennte. Gewicht und Farbe
+   sagen dasselbe, ohne ein Bedienelement vorzutaeuschen. */
+.move-cell.current {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--ink);
+    font-weight: 700;
+}
+
+/* --------------------------------------------------------------------- *
+ * Responsive - drei Bruchstellen statt acht
+ * --------------------------------------------------------------------- */
+
+/* Unter 1180 px wird die Seitenleiste schmaler, bevor sie umbricht. */
+@media (max-width: 1180px) {
+    :root { --panel-w: 300px; --shell-pad: var(--s4); }
+}
+
+/* Darunter steht die Leiste unter dem Brett - aber begrenzt, zweispaltig
+   und in Lesebreite, statt als 780 px breiter Block. */
+@media (max-width: 980px) {
+    .game-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+    .board-area {
+        --board-size: min(
+            calc(100vw - var(--rank-gutter) - 2 * var(--shell-pad)),
+            calc(100vh - var(--header-h) - 2 * var(--shell-pad) - var(--board-chrome))
+        );
+    }
+    .side-panel {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        width: min(100%, 640px);
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 620px) {
+    :root { --shell-pad: var(--s3); --header-h: 52px; --board-chrome: 120px; }
+    .app-header-inner { padding: 0 var(--s3); gap: var(--s3); grid-template-columns: auto 1fr auto; }
+    .wordmark { font-size: var(--t-base); }
+    /* Auf schmalen Geraeten traegt das Icon den Modus; die Beschriftung
+       wuerde die Leiste sprengen. */
+    .mode-tab span { display: none; }
+    .mode-tab { padding: var(--s2); }
+    .action-row { grid-template-columns: 1fr; }
+    /* Beruehrungsziele auf ein greifbares Mass. */
+    .action-button, .nav-button { min-height: 44px; }
+    .action-button.icon-only { min-height: 40px; width: 40px; }
+}
+
+/* --------------------------------------------------------------------- *
+ * Bewegung
+ * --------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ===================================================================== *
+ * BEREICHE - Stufe 6
+ * ===================================================================== *
+ *
+ * Vier Bereiche, eine Seite. `body[data-view]` sagt, welcher zu sehen ist;
+ * alles Weitere ist Ein- und Ausblenden. Kein Bereich bringt eine eigene
+ * Gestaltung mit - sie benutzen die Tokens, Knoepfe und Flaechen aus Stufe 5,
+ * damit sie nicht wie nachtraeglich angebaut wirken.
+ */
+
+/* Spielen und Puzzles teilen sich das Brett. Lernen und Analyse sind eigene
+   Flaechen und ersetzen es. */
+body[data-view="learn"] .game-layout,
+body[data-view="analysis"] .game-layout { display: none; }
+
+.area-view { display: none; }
+body[data-view="learn"] #view-learn,
+body[data-view="analysis"] #view-analysis { display: block; }
+
+/* Ohne Rahmen um die Ueberschrift: der Fokus nach einem Bereichswechsel soll
+   den Ort zeigen, nicht ihn einkasten. */
+.area-view :is(h2, .board-area):focus { outline: none; }
+.area-view :is(h2, .board-area):focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+
+.area-head { max-width: 68ch; margin: 0 0 var(--s6); }
+.area-head h2 {
+    margin: 0 0 var(--s2);
+    font-size: var(--t-lg);
+    font-weight: 650;
+    letter-spacing: -.012em;
+    color: var(--ink);
+}
+.area-head p { margin: 0; color: var(--ink-3); line-height: var(--lh-loose); }
+
+/* --------------------------------------------------------------------- *
+ * Lernen
+ * --------------------------------------------------------------------- */
+
+.learn-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--s3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.learn-card {
+    display: grid;
+    align-content: start;
+    gap: var(--s2);
+    padding: var(--s4);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+    min-width: 0;
+}
+.learn-card h3 {
+    margin: 0;
+    font-size: var(--t-md);
+    font-weight: 600;
+    color: var(--ink);
+}
+.learn-card p {
+    margin: 0;
+    font-size: var(--t-sm);
+    line-height: var(--lh-base);
+    color: var(--ink-3);
+}
+
+/* Der ehrliche Teil: hier steht, dass noch nichts da ist. Ruhig gesetzt, weil
+   es eine Auskunft ist und keine Warnung. */
+.learn-state {
+    font-size: var(--t-xs);
+    color: var(--ink-4);
+    padding-top: var(--s1);
+    border-top: 1px solid var(--line-faint);
+    margin-top: var(--s1);
+}
+
+.link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.link-button:hover { color: var(--ink); }
+
+/* --------------------------------------------------------------------- *
+ * Analyse
+ * --------------------------------------------------------------------- */
+
+.analysis-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+    margin-bottom: var(--s4);
+}
+.analysis-actions .action-button { min-width: 160px; }
+
+.analysis-slot { display: grid; gap: var(--s3); max-width: 820px; }
+/* Die Analysekarte wird hierher verschoben, nicht kopiert - sie bringt ihre
+   eigene Flaeche schon mit und braucht hier nur die volle Breite. */
+.analysis-slot .review-card { width: 100%; }
+
+/* --------------------------------------------------------------------- *
+ * Modusabhaengige Seitenleiste
+ * --------------------------------------------------------------------- *
+ * Die Regeln dafuer nannten bis eben `#group-partie` - eine Gruppe, die es
+ * seit dem Umbau der Seitenleiste nicht mehr gibt. Die Partieknoepfe blieben
+ * dadurch waehrend einer Aufgabe stehen. Jetzt greifen sie an den Knoepfen
+ * selbst. */
+body[data-mode="puzzle"] #undo-btn,
+body[data-mode="puzzle"] #resign-btn,
+body[data-mode="puzzle"] #online-start,
+body[data-mode="online"] #undo-btn,
+body[data-mode="online"] #resign-btn,
+body[data-mode="online"] #online-start { display: none; }
+
+@media (max-width: 620px) {
+    .analysis-actions .action-button { min-width: 0; flex: 1 1 140px; }
+}
+
+/* Analyse zeigt das Brett mit - die Bewertung gehoert zu einer Stellung, die
+   man dabei ansehen koennen muss. Nur Lernen ersetzt das Brett. */
+body[data-view="analysis"] .game-layout { display: grid; }
+body[data-view="analysis"] #view-analysis { margin-top: var(--s6); }
+
+/* Der leere Zustand sagt, was hier passieren wird. Er verschwindet, sobald
+   die Auswertung ihre Karte einblendet. */
+.analysis-empty {
+    margin: 0;
+    padding: var(--s4);
+    background: var(--panel);
+    border: 1px solid var(--line-faint);
+    border-radius: var(--r-panel);
+    color: var(--ink-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-loose);
+}
+.analysis-empty strong { color: var(--ink-2); font-weight: 600; }
+#analysis-slot:has(> .review-card:not([hidden])) > .analysis-empty { display: none; }
+
+/* Seit die Leiste vier statt drei Bereiche traegt, wird es im Kopf auf
+   schmalen Geraeten eng: Wortmarke, Leiste und Werkzeuge brauchten zusammen
+   431 px bei 390 px Platz. Auf Telefonbreite traegt das Zeichen die Marke
+   allein - der Schriftzug daneben ist dort das Entbehrlichste. */
+@media (max-width: 620px) {
+    .wordmark span, .wordmark { font-size: 0; gap: 0; }
+    .wordmark-icon { font-size: var(--t-base); width: 22px; height: 22px; }
+    .app-header-inner { gap: var(--s2); }
+    #area-nav { min-width: 0; }
+}
+
+/* `hidden` ist im Browser nur ein `display:none` mit der schwaechsten
+   Spezifitaet - jede Klassenregel, die `display` setzt, hebt es auf. Genau
+   das passierte der Analysekarte: sie trug `hidden`, stand aber trotzdem als
+   leerer Kasten da. Hier gilt das Attribut wieder, und zwar fuer die
+   Elemente, deren Sichtbarkeit app.js ueber genau dieses Attribut steuert. */
+#review-card[hidden],
+#analysis-slot [hidden] { display: none !important; }

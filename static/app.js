@@ -82,39 +82,152 @@
   function applyMode(){
     const mode=currentMode();
     if(document.body.dataset.mode!==mode) document.body.dataset.mode=mode;
-    for(const tab of document.querySelectorAll('.mode-tab')){
-      const active=tab.dataset.mode===mode;
+    // Der Spielzustand faerbt die Navigation mit: wer mitten in einer Aufgabe
+    // steckt, soll das am Bereich Puzzles sehen, auch wenn er gerade in
+    // Lernen blaettert.
+    syncAreaNav();
+  }
+
+  /* ===================================================================== *
+   * Bereiche
+   * ===================================================================== *
+   *
+   * Vier Bereiche, ein Zustand: `activeView`. Kein Router, keine Bibliothek -
+   * die Anwendung hat genau eine Seite, und welcher Bereich davon zu sehen
+   * ist, ist eine Variable und ein Attribut am body. Das CSS entscheidet den
+   * Rest.
+   *
+   * Wichtig ist die Trennung zu `currentMode()`: der Modus beschreibt, WAS
+   * gespielt wird (Partie, Aufgabe, Online) und gehoert zum Spielzustand. Der
+   * Bereich beschreibt, WAS man gerade ansieht. Lernen und Analyse sind reine
+   * Ansichten - sie fassen den Spielzustand nicht an, und deshalb ueberlebt
+   * eine laufende Partie den Ausflug dorthin unveraendert.
+   */
+  const AREAS=['play','puzzles','learn','analysis'];
+  let activeView='play';
+
+  function syncAreaNav(){
+    // Auch beim ersten Zeichnen, nicht erst beim ersten Wechsel: ohne das
+    // stuende beim Laden gar kein Bereich am body und die Leiste zeigte
+    // nichts als aktiv an.
+    if(document.body.dataset.view!==activeView) document.body.dataset.view=activeView;
+    for(const tab of document.querySelectorAll('#area-nav .mode-tab')){
+      const active=tab.dataset.view===activeView;
       tab.classList.toggle('active',active);
-      tab.setAttribute('aria-current',active?'true':'false');
+      // aria-current benennt den Bereich, in dem man sich befindet. Anders als
+      // aria-selected braucht es keine Tablist-Semantik drumherum.
+      if(active) tab.setAttribute('aria-current','page');
+      else tab.removeAttribute('aria-current');
     }
   }
 
   /**
-   * Der Wechsel ueber die Leiste ueber dem Brett.
+   * Wechselt den Bereich.
    *
-   * Zurueck zur Partie heisst: das Training beenden oder die Online-Partie
-   * verlassen - und das Zweite ist ein Aufgeben, weil der Gegner sonst vor
-   * einem leeren Brett sitzt. Deshalb wird gefragt.
+   * Der Spielzustand wird dabei nur dort angefasst, wo der Bereich ihn
+   * ausdruecklich meint: Puzzles startet beziehungsweise beendet das Training.
+   * Lernen und Analyse lassen die Partie in Ruhe.
    */
-  function switchMode(target){
-    if(target===currentMode()&&target!=='game') return;
-    if(target==='game'){
-      if(onlineMode){
-        if(!onlineMode.finished&&!window.confirm('Die laufende Online-Partie gilt dann als aufgegeben. Wirklich verlassen?')) return;
-        leaveOnline();
-        return;
-      }
-      if(puzzleMode){ exitPuzzle(); return; }
-      newGame();
+  function setView(target,{focus=false}={}){
+    const next=AREAS.includes(target)?target:'play';
+    if(next===activeView){
+      // Ein zweiter Klick auf Puzzles waehrend einer laufenden Aufgabe soll
+      // nicht die Aufgabe neu wuerfeln.
+      if(next==='puzzles'&&!puzzleMode) openPuzzleDialog();
       return;
     }
-    if(target==='puzzle'){ openPuzzleDialog(); return; }
-    if(target==='online'){ openOnlineDialog(); }
+
+    if(!mayLeaveForView(next)) return;
+    if(next==='puzzles'&&onlineMode) leaveOnline();
+
+    // Das Training gehoert zum Bereich Puzzles. Wer ihn verlaesst, beendet es
+    // - exitPuzzle stellt die Partie wieder her, die vorher auf dem Brett lag.
+    if(activeView==='puzzles'&&puzzleMode) exitPuzzle();
+
+    activeView=next;
+    document.body.dataset.view=next;
+    syncAreaNav();
+
+    if(next==='puzzles'&&!puzzleMode) openPuzzleDialog();
+    if(next==='analysis') mountAnalysis();
+    else unmountAnalysis();
+
+    if(focus){
+      // Nach einem Wechsel per Tastatur gehoert der Fokus in den neuen
+      // Bereich, nicht zurueck an den Anfang der Seite.
+      const heading=document.querySelector(next==='learn'?'#learn-heading'
+        :next==='analysis'?'#analysis-heading':'.board-area');
+      if(heading){ heading.setAttribute('tabindex','-1'); heading.focus({preventScroll:false}); }
+    }
+    render();
   }
 
-  document.querySelector('.mode-bar')?.addEventListener('click',event=>{
+  /* Die Analysekarte wandert in den Bereich und wieder zurueck.
+   *
+   * Sie ist dasselbe Element - verschoben, nicht kopiert. Ein zweites
+   * Exemplar haette zwei Orte fuer denselben Zustand bedeutet, und app.js
+   * haelt eine Referenz darauf. */
+  let analysisHome=null;
+  function mountAnalysis(){
+    const card=document.getElementById('review-card');
+    const slot=document.getElementById('analysis-slot');
+    if(!card||!slot||card.parentElement===slot) return;
+    analysisHome=analysisHome||{parent:card.parentElement,next:card.nextElementSibling};
+    slot.appendChild(card);
+    // Die Karte bleibt verborgen, bis eine Auswertung gelaufen ist. Sie hier
+    // aufzudecken hiesse, einen leeren Kasten mit der Ueberschrift "Analyse"
+    // hinzustellen - der leere Zustand daneben sagt statt dessen, was
+    // passieren wird.
+  }
+  function unmountAnalysis(){
+    const card=document.getElementById('review-card');
+    if(!card||!analysisHome||card.parentElement===analysisHome.parent) return;
+    analysisHome.parent.insertBefore(card,analysisHome.next);
+  }
+
+  /**
+   * Darf der Bereich jetzt gewechselt werden?
+   *
+   * Eine laufende Online-Partie ist eine Verabredung mit einem Menschen. Wer
+   * nur nachsehen will, wie ein Endspiel geht, soll das duerfen - Lernen und
+   * Analyse fassen das Brett nicht an. Die Puzzles dagegen legen eine andere
+   * Stellung auf, und das waere ein Aufgeben durch die Hintertuer. Deshalb
+   * wird genau dort gefragt.
+   */
+  function mayLeaveForView(next){
+    if(!onlineMode||onlineMode.finished) return true;
+    if(next!=='puzzles') return true;
+    return window.confirm('Die laufende Online-Partie gilt dann als aufgegeben. Wirklich verlassen?');
+  }
+
+  /* Genau ein Listener fuer die ganze Leiste, nicht einer je Knopf. Das ist
+     nicht nur kuerzer - es kann auch nicht passieren, dass ein zweiter Aufruf
+     dieser Stelle die Handler verdoppelt und jeder Klick zweimal zaehlt. */
+  document.getElementById('area-nav')?.addEventListener('click',event=>{
     const tab=event.target.closest('.mode-tab');
-    if(tab) switchMode(tab.dataset.mode);
+    if(tab) setView(tab.dataset.view);
+  });
+
+  /* Pfeiltasten wandern durch die Bereiche, Pos1 und Ende springen an die
+     Enden - so bedient man eine Leiste mit der Tastatur. */
+  document.getElementById('area-nav')?.addEventListener('keydown',event=>{
+    const tabs=[...document.querySelectorAll('#area-nav .mode-tab')];
+    const at=tabs.indexOf(document.activeElement);
+    if(at<0) return;
+    let to=null;
+    if(event.key==='ArrowRight') to=(at+1)%tabs.length;
+    else if(event.key==='ArrowLeft') to=(at-1+tabs.length)%tabs.length;
+    else if(event.key==='Home') to=0;
+    else if(event.key==='End') to=tabs.length-1;
+    if(to===null) return;
+    event.preventDefault();
+    tabs[to].focus();
+  });
+
+  /* Verweise aus den Bereichen heraus - etwa von Lernen zu den Puzzles. */
+  document.addEventListener('click',event=>{
+    const jump=event.target.closest('[data-goto]');
+    if(jump) setView(jump.dataset.goto,{focus:true});
   });
 
   /** Der laufende Trainingszustand, oder null ausserhalb des Trainings. */
@@ -406,6 +519,18 @@
         cell.pieceWrap.remove();
         cell.pieceWrap=null; cell.pieceImg=null; cell.pieceSrc=null; cell.piece=null;
       }
+
+      /* Jedes Feld sagt, was es ist.
+       *
+       * Die 64 Felder sind Schaltflaechen, und sie waren allesamt namenlos:
+       * ein Screenreader kuendigte vierundsechzig Mal "Schaltflaeche" an,
+       * ohne Feld und ohne Figur, und die Tabulatortaste lief durch alle,
+       * bevor sie die Seitenleiste erreichte. Der Name wird nur geschrieben,
+       * wenn er sich geaendert hat - render() laeuft bei jeder Interaktion. */
+      const squareLabel=piece
+        ? `${ChessEngine.squareName(r,c)}, ${ChessEngine.colorOf(piece)==='white'?'Weiß':'Schwarz'} ${ChessEngine.PIECE_NAMES[ChessEngine.typeOf(piece)]}`
+        : ChessEngine.squareName(r,c);
+      if(sq.getAttribute('aria-label')!==squareLabel) sq.setAttribute('aria-label',squareLabel);
     }
 
     document.documentElement.classList.toggle('premove-possible',canPremove());
@@ -2616,7 +2741,15 @@
     window.setTimeout(()=>showGameOver(ChessEngine.status(state,repetition)),400);
   }
 
-  document.getElementById('review-btn')?.addEventListener('click',runReview);
+  /* Die Analyse hat jetzt einen eigenen Bereich. Der Knopf in der Partie
+     bringt einen dorthin und startet sie gleich - frueher erschien die
+     Auswertung als Karte in der Seitenleiste, unter der Zugliste. */
+  document.getElementById('review-btn')?.addEventListener('click',()=>{
+    setView('analysis');
+    runReview();
+  });
+  document.getElementById('analysis-run')?.addEventListener('click',runReview);
+  document.getElementById('online-start')?.addEventListener('click',openOnlineDialog);
   document.getElementById('hint-btn')?.addEventListener('click',showHint);
   document.getElementById('resign-btn')?.addEventListener('click',resign);
   document.getElementById('flip-btn')?.addEventListener('click',()=>setFlipped(!flipped));

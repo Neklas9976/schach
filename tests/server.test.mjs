@@ -578,24 +578,47 @@ test('each mode hides what does not belong to it', () => {
   }
 });
 
-test('the three things you can play are their own section, not tools', () => {
-  // Zwischen "Brett drehen" und "Aussehen" verschwanden sie. Ueber dem Brett
-  // stehen sie da, wo die Entscheidung faellt.
+test('the areas you can go to are their own section, not tools', () => {
+  /* Diese Zusicherung ist dieselbe geblieben, ihre Form hat sich geaendert.
+   *
+   * Frueher waren es drei Reiter - Partie, Taktik, Online - mit `data-mode`.
+   * Seit dem Aufbau der Bereiche sind es vier: Spielen, Puzzles, Lernen,
+   * Analyse, ausgezeichnet mit `data-view`. Online ist dabei kein Bereich
+   * mehr, sondern eine Art zu spielen, und steht deshalb unter Spielen -
+   * drei Dinge nebeneinanderzustellen, von denen eines eine Gegnerwahl ist,
+   * war die Unsauberkeit der alten Leiste.
+   *
+   * Woran sich nichts aendert: die Bereiche stehen oben, vor dem Brett, und
+   * nicht zwischen "Brett drehen" und "Aussehen".
+   */
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const bar = html.indexOf('class="mode-bar"');
+  const bar = html.indexOf('id="area-nav"');
   const board = html.indexOf('id="chess-board"');
-  assert.ok(bar >= 0, 'keine Modusleiste');
-  assert.ok(bar < board, 'die Leiste steht nicht ueber dem Brett');
-  for (const mode of ['game', 'puzzle', 'online']) {
-    assert.ok(html.includes(`data-mode="${mode}"`), `kein Reiter fuer ${mode}`);
+  assert.ok(bar >= 0, 'keine Bereichsleiste');
+  assert.ok(bar < board, 'die Leiste steht nicht vor dem Brett');
+  for (const view of ['play', 'puzzles', 'learn', 'analysis']) {
+    assert.ok(html.includes(`data-view="${view}"`), `kein Eintrag fuer ${view}`);
   }
-  // Und aus den Werkzeugen sind sie verschwunden.
-  const tools = html.slice(html.indexOf('Werkzeuge'), html.indexOf('Ansicht'));
-  assert.equal(tools.includes('puzzle-btn'), false);
-  assert.equal(tools.includes('online-btn'), false);
+  // Und sie stehen nicht unter den Werkzeugen der Seitenleiste.
+  const tools = html.slice(html.indexOf('id="hint-btn"'), html.indexOf('id="archive-btn"'));
+  for (const view of ['play', 'puzzles', 'learn', 'analysis']) {
+    assert.equal(tools.includes(`data-view="${view}"`), false, `${view} steht bei den Werkzeugen`);
+  }
 });
 
 test('leaving a running online game asks first', () => {
-  // Sonst sitzt der Gegner vor einem leeren Brett, und es zaehlt als Aufgabe.
-  assert.match(appOnline, /if\(!onlineMode\.finished&&!window\.confirm\(/);
+  /* Sonst sitzt der Gegner vor einem leeren Brett, und es zaehlt als Aufgabe.
+   *
+   * Die Frage wird jetzt genau dort gestellt, wo sie noetig ist. Lernen und
+   * Analyse fassen das Brett nicht an - wer dort nachsieht, gibt nichts auf
+   * und soll nicht gefragt werden. Die Puzzles legen dagegen eine andere
+   * Stellung auf, und das waere ein Aufgeben durch die Hintertuer.
+   */
+  assert.match(appOnline, /function mayLeaveForView\(next\)\{[\s\S]*?window\.confirm\(/);
+  // Eine beendete Partie fragt nicht mehr.
+  assert.match(appOnline, /if\(!onlineMode\|\|onlineMode\.finished\) return true;/);
+  // Und der Bereich, der die Stellung ersetzt, ist der, bei dem gefragt wird.
+  assert.match(appOnline, /if\(next!=='puzzles'\) return true;/);
+  // Die Antwort entscheidet wirklich: bei Nein bleibt der Bereich stehen.
+  assert.match(appOnline, /if\(!mayLeaveForView\(next\)\) return;/);
 });

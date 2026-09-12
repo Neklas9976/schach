@@ -10,25 +10,79 @@
     <script src="static/theme.js"></script>
 </head>
 <body>
+    <!-- Gezeichnete Icons, ein Strichgewicht, eine Groesse, currentColor.
+         Vorher standen hier Emoji: die rendern auf jedem Betriebssystem
+         anders, lassen sich nicht auf die Textfarbe abstimmen und nicht auf
+         eine gemeinsame optische Groesse bringen. -->
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+        <symbol id="i-game" viewBox="0 0 24 24"><path d="M12 3.5a2.6 2.6 0 0 0-2.6 2.6c0 .9.45 1.7 1.14 2.18L9 11h6l-1.54-2.72A2.65 2.65 0 0 0 14.6 6.1 2.6 2.6 0 0 0 12 3.5Z"/><path d="M9 11h6l.9 4.2H8.1L9 11Z"/><path d="M7 20.5h10l-.6-3H7.6l-.6 3Z"/><path d="M8.1 15.2h7.8"/></symbol>
+        <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M10.2 4.5h3.6v1.6a1.6 1.6 0 1 0 3.2 0V4.5h2.5v5.1h-1.5a1.6 1.6 0 1 0 0 3.2h1.5v6.7h-5.1v-1.4a1.6 1.6 0 1 0-3.2 0v1.4H6.5v-6.7H5a1.6 1.6 0 1 1 0-3.2h1.5V4.5h3.7Z"/></symbol>
+        <symbol id="i-online" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M3.6 12h16.8"/><path d="M12 3.6c2.1 2.3 3.2 5.3 3.2 8.4s-1.1 6.1-3.2 8.4c-2.1-2.3-3.2-5.3-3.2-8.4S9.9 5.9 12 3.6Z"/></symbol>
+        <symbol id="i-hint" viewBox="0 0 24 24"><path d="M9.3 16.4a5.8 5.8 0 1 1 5.4 0v1.9H9.3v-1.9Z"/><path d="M10 20.6h4"/></symbol>
+        <symbol id="i-analysis" viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M6.6 16V9.8"/><path d="M11 16V5.2"/><path d="M15.4 16v-4.4"/><path d="M19.8 16V8"/></symbol>
+        <symbol id="i-transfer" viewBox="0 0 24 24"><path d="M4.5 9h13"/><path d="M14.2 5.7 17.5 9l-3.3 3.3"/><path d="M19.5 15h-13"/><path d="M9.8 11.7 6.5 15l3.3 3.3"/></symbol>
+        <symbol id="i-archive" viewBox="0 0 24 24"><path d="M4 7.3a1.6 1.6 0 0 1 1.6-1.6h3.2l1.8 2.1h7.8a1.6 1.6 0 0 1 1.6 1.6v8.7a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 18.1V7.3Z"/></symbol>
+        <symbol id="i-flip" viewBox="0 0 24 24"><path d="M8 4.6 4.6 8 8 11.4"/><path d="M4.6 8h10.2a4.6 4.6 0 0 1 4.6 4.6"/><path d="M16 19.4 19.4 16 16 12.6"/><path d="M19.4 16H9.2a4.6 4.6 0 0 1-4.6-4.6"/></symbol>
+        <symbol id="i-appearance" viewBox="0 0 24 24"><path d="M12 3.6a8.4 8.4 0 1 0 0 16.8c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.7 1.7-1.7h2a3.7 3.7 0 0 0 3.7-3.7c0-4-3.7-7.4-8.1-7.4Z"/><circle cx="7.9" cy="11.4" r="1.1"/><circle cx="11.6" cy="7.7" r="1.1"/><circle cx="16" cy="10.2" r="1.1"/></symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.9"/><path d="M19.1 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-1.7-.3 1.5 1.5 0 0 0-.9 1.4v.2a1.8 1.8 0 1 1-3.6 0V20a1.5 1.5 0 0 0-1-1.4 1.5 1.5 0 0 0-1.7.3l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0 .3-1.7 1.5 1.5 0 0 0-1.4-.9H4a1.8 1.8 0 1 1 0-3.6h.2a1.5 1.5 0 0 0 1.4-1 1.5 1.5 0 0 0-.3-1.7l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3H9.7a1.5 1.5 0 0 0 .9-1.4V4a1.8 1.8 0 1 1 3.6 0v.2a1.5 1.5 0 0 0 .9 1.4 1.5 1.5 0 0 0 1.7-.3l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.2a1.8 1.8 0 1 1 0 3.6H20a1.5 1.5 0 0 0-1.4.9Z"/></symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24"><path d="M4.8 9.4h6.4"/><path d="M4.8 9.4V3.9"/><path d="M4.8 9.4A8 8 0 1 1 6 15.6"/></symbol>
+        <symbol id="i-resign" viewBox="0 0 24 24"><path d="M6 20.5V4"/><path d="M6 5.2h11.4l-2.3 3.9 2.3 3.9H6"/></symbol>
+        <symbol id="i-first" viewBox="0 0 24 24"><path d="M6.6 5.5v13"/><path d="M18.4 6.4 10 12l8.4 5.6V6.4Z"/></symbol>
+        <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15.4 6.4 7 12l8.4 5.6V6.4Z"/></symbol>
+        <symbol id="i-next" viewBox="0 0 24 24"><path d="M8.6 6.4 17 12l-8.4 5.6V6.4Z"/></symbol>
+        <symbol id="i-last" viewBox="0 0 24 24"><path d="M17.4 5.5v13"/><path d="M5.6 6.4 14 12l-8.4 5.6V6.4Z"/></symbol>
+        <symbol id="i-draw" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M8.4 7.4h7.2"/><path d="M8.4 16.6h7.2"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.8 12S6.6 5.9 12 5.9 21.2 12 21.2 12 17.4 18.1 12 18.1 2.8 12 2.8 12Z"/><circle cx="12" cy="12" r="2.7"/></symbol>
+        <symbol id="i-retry" viewBox="0 0 24 24"><path d="M19.2 9.4h-6.4"/><path d="M19.2 9.4V3.9"/><path d="M19.2 9.4A8 8 0 1 0 18 15.6"/></symbol>
+        <symbol id="i-learn" viewBox="0 0 24 24"><path d="M4 5.2h5.2A2.8 2.8 0 0 1 12 8v11a2.4 2.4 0 0 0-2.4-2.4H4V5.2Z"/><path d="M20 5.2h-5.2A2.8 2.8 0 0 0 12 8v11a2.4 2.4 0 0 1 2.4-2.4H20V5.2Z"/></symbol>
+    </svg>
+
+    <a class="skip-link" href="#chess-board">Zum Brett springen</a>
+
+    <header class="app-header">
+        <div class="app-header-inner">
+            <h1 class="wordmark">
+                <svg class="icon wordmark-icon" aria-hidden="true"><use href="#i-game"/></svg>
+                Schach
+            </h1>
+
+            <nav class="mode-bar" id="area-nav" aria-label="Bereiche">
+                <button class="mode-tab" id="nav-play" type="button" data-view="play">
+                    <svg class="icon" aria-hidden="true"><use href="#i-game"/></svg>
+                    <span>Spielen</span>
+                </button>
+                <button class="mode-tab" id="nav-puzzles" type="button" data-view="puzzles">
+                    <svg class="icon" aria-hidden="true"><use href="#i-puzzle"/></svg>
+                    <span>Puzzles</span>
+                </button>
+                <button class="mode-tab" id="nav-learn" type="button" data-view="learn">
+                    <svg class="icon" aria-hidden="true"><use href="#i-learn"/></svg>
+                    <span>Lernen</span>
+                </button>
+                <button class="mode-tab" id="nav-analysis" type="button" data-view="analysis">
+                    <svg class="icon" aria-hidden="true"><use href="#i-analysis"/></svg>
+                    <span>Analyse</span>
+                </button>
+            </nav>
+
+            <div class="header-tools">
+                <button class="action-button icon-only" id="flip-btn" type="button" title="Brett drehen (F)" aria-label="Brett drehen">
+                    <svg class="icon" aria-hidden="true"><use href="#i-flip"/></svg>
+                </button>
+                <button class="action-button icon-only" id="appearance-btn" type="button" title="Brett &amp; Figuren" aria-label="Brett und Figuren">
+                    <svg class="icon" aria-hidden="true"><use href="#i-appearance"/></svg>
+                </button>
+                <button class="action-button icon-only" id="settings-btn" type="button" title="Einstellungen" aria-label="Einstellungen">
+                    <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
     <main class="app-shell">
         <section class="game-card" aria-label="Schachspiel">
             <div class="game-layout">
                 <div class="board-area">
-                    <nav class="mode-bar" aria-label="Was gespielt wird">
-                        <button class="mode-tab" id="mode-game" type="button" data-mode="game">
-                            <span class="mode-tab-icon" aria-hidden="true">♟</span>
-                            <span class="mode-tab-text"><strong>Partie</strong><small>Gegen Computer oder zu zweit</small></span>
-                        </button>
-                        <button class="mode-tab" id="mode-puzzle" type="button" data-mode="puzzle">
-                            <span class="mode-tab-icon" aria-hidden="true">🧩</span>
-                            <span class="mode-tab-text"><strong>Taktik</strong><small>Aufgaben lösen</small></span>
-                        </button>
-                        <button class="mode-tab" id="mode-online" type="button" data-mode="online">
-                            <span class="mode-tab-icon" aria-hidden="true">🌐</span>
-                            <span class="mode-tab-text"><strong>Online</strong><small>Gegen andere Menschen</small></span>
-                        </button>
-                    </nav>
-
                     <div class="player-strip top-player">
                         <div class="player-avatar black-avatar" id="top-avatar">♚</div>
                         <div class="player-identity">
@@ -67,7 +121,6 @@
 
                 <aside class="side-panel">
                     <div class="status-card" id="status-card">
-                        <div class="status-kicker">PARTIE</div>
                         <div class="status-main" id="turn-text">Weiß ist am Zug</div>
                         <div class="status-extra" id="status-extra">Wähle eine Figur aus.</div>
                     </div>
@@ -77,7 +130,6 @@
                     <div class="online-card" id="online-card" hidden>
                         <div class="online-head">
                             <div>
-                                <div class="status-kicker">ONLINE</div>
                                 <div class="online-title" id="online-title">Partie läuft</div>
                             </div>
                             <div class="online-dot" id="online-dot" title="Verbindung"></div>
@@ -91,8 +143,8 @@
                             </div>
                         </div>
                         <div class="action-row online-actions">
-                            <button class="action-button secondary" id="online-offer-draw" type="button">½ Remis</button>
-                            <button class="action-button secondary" id="online-resign" type="button">🏳 Aufgeben</button>
+                            <button class="action-button secondary" id="online-offer-draw" type="button"><svg class="icon" aria-hidden="true"><use href="#i-draw"/></svg>Remis</button>
+                            <button class="action-button secondary" id="online-resign" type="button"><svg class="icon" aria-hidden="true"><use href="#i-resign"/></svg>Aufgeben</button>
                         </div>
                         <button class="action-button secondary wide" id="online-leave" type="button">Online verlassen</button>
                     </div>
@@ -100,7 +152,6 @@
                     <div class="puzzle-card" id="puzzle-card" hidden>
                         <div class="puzzle-head">
                             <div>
-                                <div class="status-kicker">TAKTIK</div>
                                 <div class="puzzle-title" id="puzzle-title">Weiß am Zug</div>
                             </div>
                             <div class="puzzle-badge" id="puzzle-badge" title="Schwierigkeit dieser Aufgabe">1200</div>
@@ -109,10 +160,10 @@
                         <div class="puzzle-steps" id="puzzle-steps" aria-hidden="true"></div>
                         <div class="puzzle-meta" id="puzzle-meta"></div>
                         <div class="action-row puzzle-actions">
-                            <button class="action-button secondary" id="puzzle-hint" type="button" title="Die gesuchte Figur zeigen">💡 Hinweis</button>
-                            <button class="action-button secondary" id="puzzle-solution" type="button" title="Lösung vorführen">👁 Lösung</button>
-                            <button class="action-button secondary" id="puzzle-retry" type="button" title="Aufgabe neu beginnen">↻ Nochmal</button>
-                            <button class="action-button primary" id="puzzle-next" type="button">Nächste ▸</button>
+                            <button class="action-button secondary" id="puzzle-hint" type="button" title="Die gesuchte Figur zeigen"><svg class="icon" aria-hidden="true"><use href="#i-hint"/></svg>Hinweis</button>
+                            <button class="action-button secondary" id="puzzle-solution" type="button" title="Lösung vorführen"><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg>Lösung</button>
+                            <button class="action-button secondary" id="puzzle-retry" type="button" title="Aufgabe neu beginnen"><svg class="icon" aria-hidden="true"><use href="#i-retry"/></svg>Nochmal</button>
+                            <button class="action-button primary" id="puzzle-next" type="button">Nächste<svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
                         </div>
                         <button class="action-button secondary wide puzzle-exit" id="puzzle-exit" type="button">Training beenden</button>
                     </div>
@@ -124,10 +175,10 @@
                         </div>
                         <div class="moves-list" id="moves-list" aria-live="polite"></div>
                         <div class="move-nav" role="group" aria-label="Partie durchblättern">
-                            <button class="nav-button" id="nav-first" type="button" title="Zum Anfang (Pos1)" disabled>⏮</button>
-                            <button class="nav-button" id="nav-prev" type="button" title="Ein Zug zurück (←)" disabled>◀</button>
-                            <button class="nav-button" id="nav-next" type="button" title="Ein Zug vor (→)" disabled>▶</button>
-                            <button class="nav-button" id="nav-last" type="button" title="Zum Ende (Ende)" disabled>⏭</button>
+                            <button class="nav-button" id="nav-first" type="button" title="Zum Anfang (Pos1)" aria-label="Zum Anfang" disabled><svg class="icon" aria-hidden="true"><use href="#i-first"/></svg></button>
+                            <button class="nav-button" id="nav-prev" type="button" title="Ein Zug zurück (←)" aria-label="Ein Zug zurück" disabled><svg class="icon" aria-hidden="true"><use href="#i-prev"/></svg></button>
+                            <button class="nav-button" id="nav-next" type="button" title="Ein Zug vor (→)" aria-label="Ein Zug vor" disabled><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
+                            <button class="nav-button" id="nav-last" type="button" title="Zum Ende (Ende)" aria-label="Zum Ende" disabled><svg class="icon" aria-hidden="true"><use href="#i-last"/></svg></button>
                         </div>
                     </div>
 
@@ -142,35 +193,40 @@
                     </div>
 
                     <nav class="action-groups" aria-label="Aktionen">
-                        <div class="action-group" id="group-partie">
-                            <h3 class="action-group-label">Partie</h3>
-                            <div class="action-row">
-                                <button class="action-button secondary" id="undo-btn" type="button" disabled>↶ Zurück</button>
-                                <button class="action-button secondary" id="resign-btn" type="button" title="Partie aufgeben">🏳 Aufgeben</button>
-                            </div>
+                        <button class="action-button primary new-game" id="new-game-btn" type="button">Neue Partie</button>
+
+                        <div class="action-row">
+                            <button class="action-button secondary" id="undo-btn" type="button" disabled>
+                                <svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg>Zurück
+                            </button>
+                            <button class="action-button danger" id="resign-btn" type="button" title="Partie aufgeben">
+                                <svg class="icon" aria-hidden="true"><use href="#i-resign"/></svg>Aufgeben
+                            </button>
                         </div>
 
-                        <div class="action-group" id="group-werkzeuge">
-                            <h3 class="action-group-label">Werkzeuge</h3>
-                            <div class="action-row">
-                                <button class="action-button secondary" id="hint-btn" type="button" title="Besten Zug zeigen (H)">💡 Hinweis</button>
-                                <button class="action-button secondary" id="review-btn" type="button" title="Partie analysieren">📊 Analyse</button>
-                                <button class="action-button secondary" id="pgn-btn" type="button" title="PGN / FEN (S)">↔ PGN &amp; FEN</button>
-                                <button class="action-button secondary" id="archive-btn" type="button" title="Meine Partien (P)">📁 Partien</button>
-                            </div>
+                        <div class="action-row">
+                            <button class="action-button ghost" id="hint-btn" type="button" title="Besten Zug zeigen (H)">
+                                <svg class="icon" aria-hidden="true"><use href="#i-hint"/></svg>Hinweis
+                            </button>
+                            <button class="action-button ghost" id="review-btn" type="button" title="Partie analysieren">
+                                <svg class="icon" aria-hidden="true"><use href="#i-analysis"/></svg>Analyse
+                            </button>
+                            <button class="action-button ghost" id="pgn-btn" type="button" title="PGN / FEN (S)">
+                                <svg class="icon" aria-hidden="true"><use href="#i-transfer"/></svg>PGN &amp; FEN
+                            </button>
+                            <button class="action-button ghost" id="archive-btn" type="button" title="Meine Partien (P)">
+                                <svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg>Partien
+                            </button>
                         </div>
 
-                        <div class="action-group">
-                            <h3 class="action-group-label">Ansicht</h3>
-                            <div class="action-row">
-                                <button class="action-button secondary" id="flip-btn" type="button" title="Brett drehen (F)">⇅ Drehen</button>
-                                <button class="action-button secondary" id="appearance-btn" type="button">🎨 Aussehen</button>
-                                <button class="action-button secondary wide" id="settings-btn" type="button">⚙ Einstellungen</button>
-                            </div>
-                        </div>
+                        <!-- Online ist eine Art zu spielen und gehoert deshalb hierher.
+                             Frueher stand es als dritter Reiter neben Partie und Taktik,
+                             was drei Dinge nebeneinanderstellte, die keine Geschwister
+                             sind: zwei Bereiche und eine Gegnerwahl. -->
+                        <button class="action-button secondary wide" id="online-start" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-online"/></svg>Online spielen
+                        </button>
                     </nav>
-
-                    <button class="action-button primary new-game" id="new-game-btn" type="button">Neue Partie</button>
 
                     <div class="help-text">
                         <strong>Tipp:</strong> Rechtsklick zeichnet Pfeile und markiert Felder. Mit ← und → blätterst du durch die Partie.
@@ -183,6 +239,64 @@
                     </div>
                 </aside>
             </div>
+
+            <!-- Lernen.
+                 Die Struktur steht, die Inhalte nicht. Jede Kategorie sagt das
+                 auch: erfundene Lektionen waeren schlimmer als eine ehrliche
+                 Leerstelle, weil man ihnen erst beim Anklicken ansieht, dass
+                 nichts dahinter ist. -->
+            <section class="area-view" id="view-learn" aria-labelledby="learn-heading" hidden>
+                <header class="area-head">
+                    <h2 id="learn-heading">Lernen</h2>
+                    <p>Fünf Gebiete, die eine Schachausbildung ausmachen. Die Inhalte entstehen schrittweise – hier steht bislang nur das Gerüst.</p>
+                </header>
+                <ul class="learn-grid">
+                    <li class="learn-card" data-topic="grundlagen">
+                        <h3>Grundlagen</h3>
+                        <p>Gangart der Figuren, Schlagen, Rochade, en passant, Umwandlung, Remisregeln.</p>
+                        <span class="learn-state">Noch keine Lektionen</span>
+                    </li>
+                    <li class="learn-card" data-topic="taktik">
+                        <h3>Taktik</h3>
+                        <p>Gabel, Fesselung, Spieß, Abzugsschach, Zwischenzug, Mattbilder.</p>
+                        <span class="learn-state">Übungen dazu gibt es schon unter <button class="link-button" type="button" data-goto="puzzles">Puzzles</button></span>
+                    </li>
+                    <li class="learn-card" data-topic="eroeffnungen">
+                        <h3>Eröffnungen</h3>
+                        <p>Grundsätze statt Auswendiglernen: Zentrum, Entwicklung, Königssicherheit.</p>
+                        <span class="learn-state">Noch keine Lektionen</span>
+                    </li>
+                    <li class="learn-card" data-topic="mittelspiel">
+                        <h3>Mittelspiel</h3>
+                        <p>Pläne, Schwächen, Bauernstruktur, Figurenaktivität, Angriff auf den König.</p>
+                        <span class="learn-state">Noch keine Lektionen</span>
+                    </li>
+                    <li class="learn-card" data-topic="endspiel">
+                        <h3>Endspiel</h3>
+                        <p>Königsaktivität, Opposition, Bauernendspiele, Turm hinter den Freibauern.</p>
+                        <span class="learn-state">Noch keine Lektionen</span>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- Analyse.
+                 Die Auswertung gibt es bereits: review.js bewertet jeden Zug,
+                 Stockfish liefert die Zahlen, der Verlauf wird gezeichnet. Was
+                 fehlte, war ein Ort dafuer - sie lag als Karte in der
+                 Seitenleiste der Partie. -->
+            <section class="area-view" id="view-analysis" aria-labelledby="analysis-heading" hidden>
+                <header class="area-head">
+                    <h2 id="analysis-heading">Analyse</h2>
+                    <p id="analysis-intro">Die laufende Partie, Zug für Zug bewertet. Die Auswertung rechnet Stockfish im Browser – je nach Partielänge dauert das einen Moment.</p>
+                </header>
+                <div class="analysis-actions">
+                    <button class="action-button primary" id="analysis-run" type="button">Partie auswerten</button>
+                    <button class="action-button ghost" id="analysis-to-game" type="button" data-goto="play">Zurück zur Partie</button>
+                </div>
+                <div class=analysis-slot id=analysis-slot>
+                    <p class="analysis-empty" id="analysis-empty">Noch nicht ausgewertet. <strong>Partie auswerten</strong> geht jeden Zug durch und bewertet ihn – Genauigkeit, Verlauf und die einzelnen Züge erscheinen danach hier.</p>
+                </div>
+            </section>
 
             <footer class="site-footer">
                 <span>Freie Software unter der <a href="LICENSE">GNU GPL v3</a>.</span>
@@ -208,7 +322,7 @@
             <div class="gameover-reason" id="gameover-reason"></div>
             <div class="gameover-score" id="gameover-score"></div>
             <div class="gameover-actions">
-                <button class="action-button secondary" id="gameover-review" type="button">📊 Analyse</button>
+                <button class="action-button secondary" id="gameover-review" type="button"><svg class="icon" aria-hidden="true"><use href="#i-analysis"/></svg>Analyse</button>
                 <button class="action-button secondary" id="gameover-close" type="button">Brett ansehen</button>
                 <button class="action-button primary" id="gameover-rematch" type="button">Revanche</button>
             </div>
@@ -219,7 +333,6 @@
         <div class="archive-modal" role="dialog" aria-modal="true" aria-labelledby="archive-title">
             <div class="settings-header">
                 <div>
-                    <div class="status-kicker">ARCHIV</div>
                     <h2 id="archive-title">Meine Partien</h2>
                     <div class="appearance-current">Beendete Partien werden automatisch gesichert – auf diesem Gerät</div>
                 </div>
@@ -241,7 +354,6 @@
         <div class="online-modal" role="dialog" aria-modal="true" aria-labelledby="online-modal-title">
             <div class="settings-header">
                 <div>
-                    <div class="status-kicker">ONLINE</div>
                     <h2 id="online-modal-title">Gegen andere spielen</h2>
                     <div class="appearance-current" id="online-connection">Nicht verbunden</div>
                 </div>
@@ -295,7 +407,6 @@
         <div class="puzzle-modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-modal-title">
             <div class="settings-header">
                 <div>
-                    <div class="status-kicker">TRAINING</div>
                     <h2 id="puzzle-modal-title">Taktik</h2>
                     <div class="appearance-current">Stellungen aus echten Partien – jede Lösung von Stockfish geprüft</div>
                 </div>
@@ -324,7 +435,6 @@
         <div class="pgn-modal" role="dialog" aria-modal="true" aria-labelledby="pgn-title">
             <div class="settings-header">
                 <div>
-                    <div class="status-kicker">PARTIE-DATEN</div>
                     <h2 id="pgn-title">PGN &amp; FEN</h2>
                     <div class="appearance-current">Partie sichern, weitergeben oder eine fremde Partie laden</div>
                 </div>
@@ -363,7 +473,6 @@
         <div class="appearance-modal" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
             <div class="appearance-header">
                 <div>
-                    <div class="status-kicker">DARSTELLUNG</div>
                     <h2 id="appearance-title">Brett &amp; Figuren</h2>
                     <div class="appearance-current">Brett: <strong id="active-board-name">Brown</strong> · Figuren: <strong id="active-piece-name">3D Wood</strong></div>
                 </div>
@@ -392,7 +501,6 @@
         <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
             <div class="settings-header">
                 <div>
-                    <div class="status-kicker">SPIELBRETT</div>
                     <h2 id="settings-title">Einstellungen</h2>
                     <div class="appearance-current">Bewegung und Animationen</div>
                 </div>
